@@ -7,7 +7,10 @@ trigger:
 - ci
 
 pool:
-  vmImage: 'debian-latest'
+  vmImage: 'ubuntu-latest'
+
+container: 'debian:jessie'
+
 
 steps:
 - script: echo Hello, world!
@@ -21,5 +24,6 @@ steps:
 - script: |
     ls
     pwd
+    uname -a
   displayName: 'Test ls pwd'
 
