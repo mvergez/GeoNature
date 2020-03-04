@@ -27,6 +27,7 @@ steps:
   displayName: 'Settings'
 
 - script: |
+    su
     apt install sudo wget postgresql postgresql-contrib curl unzip git
   displayName: 'Install deps'
 
