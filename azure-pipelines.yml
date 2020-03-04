@@ -27,11 +27,17 @@ steps:
   displayName: 'Settings'
 
 - bash: |
+    echo release
     cat /etc/*-release
+    echo
+    echo id
     id
-    su
+  displayName: 'informations'
 
-  displayName: 'Test sudo'
+  - bash: |
+    su
+  displayName: 'Test su'
+
 
 
 - script: |
