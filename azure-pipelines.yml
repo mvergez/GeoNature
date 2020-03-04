@@ -27,7 +27,8 @@ steps:
   displayName: 'Settings'
 
 - script: |
-    sudo ls    
+    id
+    su
   displayName: 'Test sudo'
 
 
