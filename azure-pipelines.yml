@@ -34,11 +34,9 @@ steps:
     id
   displayName: 'informations'
 
-  - bash: |
+- bash: |
     su
   displayName: 'Test su'
-
-
 
 - script: |
     apt-get install sudo
