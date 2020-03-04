@@ -24,6 +24,6 @@ steps:
 - script: |
     ls
     pwd
-    uname -a
-  displayName: 'Test ls pwd'
+    cat /etc/*-release
+  displayName: 'Tests divers'
 
