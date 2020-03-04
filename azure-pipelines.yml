@@ -11,7 +11,6 @@ pool:
 
 container: 'debian:jessie'
 
-
 steps:
 - script: echo Hello, world!
   displayName: 'Run a one-line script'
@@ -22,8 +21,16 @@ steps:
   displayName: 'Run a multi-line script'
 
 - script: |
-    ls
-    pwd
-    cat /etc/*-release
-  displayName: 'Tests divers'
+    cp config/settings.ini.sample config/settings.ini
+    . settings.ini
+    cat config/settings.ini
+  displayName: 'Settings'
 
+- script: |
+    sudo apt install wget postgresql postgresql-contrib curl unzip git
+  displayName: 'Install deps'
+
+- script: |
+    cd install
+    ./install_db.sh
+  displayName: 'Install DB'
