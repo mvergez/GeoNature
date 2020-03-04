@@ -26,9 +26,11 @@ steps:
     cat config/settings.ini
   displayName: 'Settings'
 
-- script: |
+- bash: |
+    cat /etc/*-release
     id
     su
+
   displayName: 'Test sudo'
 
 
