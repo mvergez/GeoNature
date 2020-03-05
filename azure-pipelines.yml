@@ -10,8 +10,7 @@ pool:
   vmImage: ubuntu-latest
 
 container: 
-  image: debian:stretch
-  options: '-u 0:0'  
+  image: joelclems/geonature
 
 steps:
 
