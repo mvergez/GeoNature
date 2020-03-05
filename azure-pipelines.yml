@@ -37,7 +37,7 @@ steps:
 #   displayName: 'Install deps'
 
 - bash: |
-    cd install/intall_all
+    cd install/install_all
     ./install_all.sh
   displayName: 'Install DB'
 
