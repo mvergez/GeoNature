@@ -16,9 +16,7 @@ steps:
 
 - script: |
     cp config/settings.ini.sample config/settings.ini
-    . settings.ini
-    cat config/settings.ini
-    sed 's|mon.domaine.com|127.0.0.1|' install/install_all/install_all.ini
+    sed -i 's|mon.domaine.com|127.0.0.1|' install/install_all/install_all.ini
   displayName: 'Settings'
  
 - bash: |
@@ -26,12 +24,19 @@ steps:
     id
   displayName: 'informations'
 
-- script: |
+- bash: |
     sudo apt -y update
-    sudo apt -y install wget postgresql postgresql-contrib curl unzip git
+  displayName: 'test apt update'
+
+- bash: |
+    sudo apt install wget -y 
+  displayName: 'test apt install wget'
+
+- bash: |
+    sudo apt install wget postgresql postgresql-contrib curl unzip git -y
   displayName: 'Install deps'
 
-- script: |
+- bash: |
     cd install
     ./install_db.sh
   displayName: 'Install DB'
