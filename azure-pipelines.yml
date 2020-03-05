@@ -24,17 +24,17 @@ steps:
     id
   displayName: 'informations'
 
-- bash: |
-    sudo apt update -y
-  displayName: 'test apt update'
+# - bash: |
+#     sudo apt update -y
+#   displayName: 'test apt update'
 
-- bash: |
-    sudo apt install wget -y 
-  displayName: 'test apt install wget'
+# - bash: |
+#     sudo apt install wget -y 
+#   displayName: 'test apt install wget'
 
-- bash: |
-    sudo apt install wget postgresql postgresql-contrib curl unzip git -y
-  displayName: 'Install deps'
+# - bash: |
+#     sudo apt install wget postgresql postgresql-contrib curl unzip git -y
+#   displayName: 'Install deps'
 
 - bash: |
     cd install/intall_all
