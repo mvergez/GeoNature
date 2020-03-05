@@ -43,7 +43,7 @@ steps:
     pwd
     sudo apt install -y git 
     git clone https://github.com/PnX-SI/GeoNature-packaging.git
-    git co integration-testing
+    git checkout integration-testing
     cp settings.ini.sample settings.ini
     ./integration_tests.sh setup
     ./integration_tests.sh run_all
