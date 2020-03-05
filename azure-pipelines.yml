@@ -39,6 +39,11 @@ steps:
   displayName: 'Install all'
 
 - bash: |
+    command -v python3.5
+  displayName: 'test python 3.5'
+
+
+- bash: |
     sudo apt install -y git python3.5
     git clone https://github.com/PnX-SI/GeoNature-packaging.git
     cd GeoNature-packaging
