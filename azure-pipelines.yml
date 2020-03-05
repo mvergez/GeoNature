@@ -26,7 +26,7 @@ steps:
   displayName: 'informations'
 
 - script: |
-    apt-get install sudo
+    sudo apt-get install sudo
     sudo ls
   displayName: 'Test apt installsudo'
 
