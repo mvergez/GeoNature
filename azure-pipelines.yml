@@ -35,8 +35,9 @@ steps:
   displayName: 'informations'
 
 - bash: |
-    su
-  displayName: 'Test su'
+    apt install sudo
+  runAsRoot: true
+  displayName: 'Test apt installsudo'
 
 - script: |
     apt-get install sudo
