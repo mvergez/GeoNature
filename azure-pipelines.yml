@@ -19,7 +19,7 @@ steps:
     . settings.ini
     cat config/settings.ini
   displayName: 'Settings'
-
+ 
 - bash: |
     cat /etc/*-release
     id
