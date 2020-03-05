@@ -7,10 +7,12 @@ trigger:
 - ci
 
 pool:
-  vmImage: 'ubuntu-latest'
+  vmImage: ubuntu-latest
 
 container: 
-  image: 'debian:jessie'
+  name: debian-9
+  image: debian:stretch
+  user: 0
   # options: 
   #   user: 0
 
