@@ -10,7 +10,7 @@ pool:
   vmImage: ubuntu-latest
 
 container: 
-  image: geonature/debian:stretch
+  image: geonature/debian:buster
 
 steps:
 
