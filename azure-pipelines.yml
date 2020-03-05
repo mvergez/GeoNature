@@ -11,7 +11,8 @@ pool:
 
 container: 
   image: debian:stretch
-    
+  args: '-u 0'  
+
 steps:
 
 - script: |
