@@ -24,9 +24,9 @@ steps:
     id
   displayName: 'informations'
 
-# - bash: |
-#     sudo apt update -y
-#   displayName: 'test apt update'
+- bash: |
+    sudo apt update -y
+  displayName: 'apt update'
 
 # - bash: |
 #     sudo apt install wget -y 
@@ -39,5 +39,5 @@ steps:
 - bash: |
     cd install/install_all
     ./install_all.sh
-  displayName: 'Install DB'
+  displayName: 'Install All'
 
