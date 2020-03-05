@@ -11,7 +11,7 @@ pool:
 
 container: 
   image: debian:stretch
-  options: '-u 0'  
+  options: '-u root'  
 
 steps:
 
@@ -22,10 +22,7 @@ steps:
   displayName: 'Settings'
 
 - bash: |
-    echo release
     cat /etc/*-release
-    echo
-    echo id
     id
   displayName: 'informations'
 
