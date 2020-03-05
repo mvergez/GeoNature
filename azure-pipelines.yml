@@ -23,9 +23,9 @@ container: $[ variables['containerImage'] ]
 steps:
 
 - bash: |
-  cat /etc/*-release
-  id
-displayName: 'system information'
+    cat /etc/*-release
+    id
+  displayName: 'system information'
 
 - bash: |
     sed -i 's|mon.domaine.com|127.0.0.1|' install/install_all/install_all.ini
