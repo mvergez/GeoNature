@@ -11,17 +11,8 @@ pool:
 
 container: 
   image: debian:stretch
-  options: 
-    user: 0
-
+    
 steps:
-- script: echo Hello, world!
-  displayName: 'Run a one-line script'
-
-- script: |
-    echo Add other tasks to build, test, and deploy your project.
-    echo See https://aka.ms/yaml
-  displayName: 'Run a multi-line script'
 
 - script: |
     cp config/settings.ini.sample config/settings.ini
@@ -38,6 +29,7 @@ steps:
   displayName: 'informations'
 
 - bash: |
+    su
     apt install sudo
   displayName: 'Test apt installsudo'
 
