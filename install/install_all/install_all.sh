@@ -48,6 +48,8 @@ echo "############### Installation des paquets systèmes ###############"
 
 # Updating language locale
 sudo apt-get install -y locales
+echo "############### Installation des paquets systèmes fait ###############"
+
 sudo sed -i "s/# $my_local/$my_local/g" /etc/locale.gen
 sudo locale-gen $my_local
 echo "export LC_ALL=$my_local" >> ~/.bashrc
