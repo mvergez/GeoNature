@@ -10,11 +10,9 @@ pool:
   vmImage: ubuntu-latest
 
 container: 
-  name: debian-9
   image: debian:stretch
-  user: 0
-  # options: 
-  #   user: 0
+  options: 
+    user: 0
 
 steps:
 - script: echo Hello, world!
