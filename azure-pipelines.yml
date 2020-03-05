@@ -25,7 +25,6 @@ steps:
     id
   displayName: 'informations'
 
-
 - script: |
     sudo apt update
     sudo apt install sudo wget postgresql postgresql-contrib curl unzip git
