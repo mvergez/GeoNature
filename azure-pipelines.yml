@@ -39,7 +39,7 @@ steps:
   displayName: 'Install all'
 
 - bash: |
-    command -v python3.5
+    echo __ $(command -v python3.5)
   displayName: 'test python 3.5'
 
 - bash: |
