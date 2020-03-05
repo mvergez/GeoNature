@@ -39,8 +39,6 @@ steps:
   displayName: 'Install all'
 
 - bash: |
-    cd ../../..
-    pwd
     sudo apt install -y git 
     git clone https://github.com/PnX-SI/GeoNature-packaging.git
     cd GeoNature-packaging
