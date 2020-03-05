@@ -26,8 +26,8 @@ steps:
   displayName: 'informations'
 
 - script: |
-    sudo apt update
-    sudo -y apt install wget postgresql postgresql-contrib curl unzip git
+    sudo apt -y update
+    sudo apt -y install wget postgresql postgresql-contrib curl unzip git
   displayName: 'Install deps'
 
 - script: |
@@ -35,4 +35,3 @@ steps:
     ./install_db.sh
   displayName: 'Install DB'
 
-  
