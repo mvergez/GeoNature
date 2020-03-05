@@ -9,8 +9,17 @@ trigger:
 pool:
   vmImage: ubuntu-latest
 
-container: 
-  image: geonature/debian:buster
+strategy:
+  matrix:
+    ubuntu18:
+      containerImage: ubuntu:18.04
+    debian9:
+      containerImage: geonature/debian:stretch
+    debian10:
+      containerImage: geonature/debian:buster
+      
+
+container: $[ variables['containerImage'] ]
 
 steps:
 
@@ -40,6 +49,6 @@ steps:
 
 - bash: |
     cd install/install_all
-    ./install_all.sh
+    echo ./install_all.sh
   displayName: 'Install All'
 
