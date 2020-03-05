@@ -34,3 +34,5 @@ steps:
     cd install
     ./install_db.sh
   displayName: 'Install DB'
+
+  
