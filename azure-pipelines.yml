@@ -27,7 +27,7 @@ steps:
     id
   displayName: 'system information'
 
-  
+
 - bash: |
     sed -i 's|mon.domaine.com|127.0.0.1|' install/install_all/install_all.ini
     sed -i 's|install_sig_layers=true|install_sig_layers=false|' install/install_all/install_all.ini
@@ -41,6 +41,7 @@ steps:
 - bash: |
     cd ../../..
     pwd
+    sudo apt install git
     git clone https://github.com/PnX-SI/GeoNature-packaging.git
     git co integration-testing
     cp settings.ini.sample settings.ini
