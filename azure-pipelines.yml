@@ -18,6 +18,7 @@ steps:
     cp config/settings.ini.sample config/settings.ini
     . settings.ini
     cat config/settings.ini
+    sed 's|mon.domaine.com|127.0.0.1|' install/install_all/install_all.ini
   displayName: 'Settings'
  
 - bash: |
