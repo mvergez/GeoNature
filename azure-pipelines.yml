@@ -11,7 +11,7 @@ pool:
 
 container: 
   image: debian:stretch
-  options: '--u 0:0'  
+  options: '-u 0:0'  
 
 steps:
 
