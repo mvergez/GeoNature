@@ -11,8 +11,8 @@ pool:
 
 container: 
   image: 'debian:jessie'
-  options: 
-    user: 0
+  # options: 
+  #   user: 0
 
 steps:
 - script: echo Hello, world!
