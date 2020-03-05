@@ -22,32 +22,27 @@ container: $[ variables['containerImage'] ]
 
 steps:
 
-- script: |
+- bash: |
+  cat /etc/*-release
+  id
+displayName: 'system information'
+
+- bash: |
     sed -i 's|mon.domaine.com|127.0.0.1|' install/install_all/install_all.ini
     sed -i 's|install_sig_layers=true|install_sig_layers=false|' install/install_all/install_all.ini
     sed -i 's|install_grid_layer=true|install_grid_layer=false|' install/install_all/install_all.ini
     sed -i 's|install_default_dem=true|install_default_dem=false|' install/install_all/install_all.ini
-  displayName: 'Settings'
- 
-- bash: |
-    cat /etc/*-release
-    id
-  displayName: 'informations'
-
-- bash: |
     sudo apt update -y
-  displayName: 'apt update'
-
-# - bash: |
-#     sudo apt install wget -y 
-#   displayName: 'test apt install wget'
-
-# - bash: |
-#     sudo apt install wget postgresql postgresql-contrib curl unzip git -y
-#   displayName: 'Install deps'
+    cd install/install_all
+    echo ./install_all.sh
+  displayName: 'Install all'
 
 - bash: |
-    cd install/install_all
-    ./install_all.sh
-  displayName: 'Install All'
-
+    cd ../../..
+    pwd
+    git clone https://github.com/PnX-SI/GeoNature-packaging.git
+    git co integration-testing
+    cp settings.ini.sample settings.ini
+    ./integration_tests.sh setup
+    ./integration_tests.sh run_all
+  displayName: 'Integration test'
