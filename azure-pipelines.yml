@@ -25,7 +25,7 @@ steps:
   displayName: 'informations'
 
 - bash: |
-    sudo apt -y update
+    sudo apt update -y
   displayName: 'test apt update'
 
 - bash: |
