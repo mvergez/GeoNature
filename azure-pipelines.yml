@@ -48,6 +48,6 @@ steps:
 
 - bash: |
     cd install/install_all
-    echo ./install_all.sh
+    ./install_all.sh
   displayName: 'Install All'
 
