@@ -47,4 +47,4 @@ steps:
     ./integration_tests.sh setup
     ./integration_tests.sh run_all
   displayName: 'Integration test'
-  
+
