@@ -9,7 +9,10 @@ trigger:
 pool:
   vmImage: 'ubuntu-latest'
 
-container: 'debian:jessie'
+container: 
+  image: 'debian:jessie'
+  options: 
+    user: 0
 
 steps:
 - script: echo Hello, world!
@@ -36,7 +39,6 @@ steps:
 
 - bash: |
     apt install sudo
-  runAsRoot: true
   displayName: 'Test apt installsudo'
 
 - script: |
