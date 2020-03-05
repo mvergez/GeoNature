@@ -29,8 +29,7 @@ steps:
   displayName: 'informations'
 
 - script: |
-    su
-    apt install sudo
+    python -V
   displayName: 'Test apt installsudo'
 
 - script: |
