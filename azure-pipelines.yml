@@ -11,7 +11,7 @@ pool:
 
 container: 
   image: debian:stretch
-  options: '-u root'  
+  options: '--user root'  
 
 steps:
 
