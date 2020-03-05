@@ -28,7 +28,7 @@ steps:
     id
   displayName: 'informations'
 
-- bash: |
+- script: |
     su
     apt install sudo
   displayName: 'Test apt installsudo'
