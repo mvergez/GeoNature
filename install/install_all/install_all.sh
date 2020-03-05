@@ -48,8 +48,6 @@ echo "############### Installation des paquets systèmes ###############"
 
 # Updating language locale
 sudo apt-get install -y locales
-echo "############### Installation des paquets systèmes fait ###############"
-
 sudo sed -i "s/# $my_local/$my_local/g" /etc/locale.gen
 sudo locale-gen $my_local
 echo "export LC_ALL=$my_local" >> ~/.bashrc
@@ -63,7 +61,9 @@ echo "Installation de l'environnement logiciel..."
 sudo apt-get -y install ntpdate 
 sudo ntpdate-debian 
 sudo apt-get install -y curl unzip git 
+echo 'install apache'
 sudo apt-get install -y apache2 libapache2-mod-wsgi libapache2-mod-perl2 
+echo 'install apache done'
 sudo apt-get install -y postgresql 
 sudo apt-get install -y postgresql-contrib
 sudo apt-get install -y wget
