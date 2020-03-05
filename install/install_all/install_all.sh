@@ -1,4 +1,6 @@
 #!/bin/bash
+
+set -x
 . install_all.ini
 . /etc/os-release
 OS_NAME=$ID
