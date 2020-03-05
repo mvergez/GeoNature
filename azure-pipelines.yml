@@ -18,7 +18,6 @@ strategy:
     debian10:
       containerImage: geonature/debian:buster
       
-
 container: $[ variables['containerImage'] ]
 
 steps:
