@@ -31,8 +31,7 @@ steps:
   displayName: 'Test apt installsudo'
 
 - script: |
-    apt-get install sudo
-    apt install sudo wget postgresql postgresql-contrib curl unzip git
+    sudo apt install sudo wget postgresql postgresql-contrib curl unzip git
   displayName: 'Install deps'
 
 - script: |
