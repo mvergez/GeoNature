@@ -39,6 +39,7 @@ steps:
   displayName: 'Install all'
 
 - bash: |
+    sudo apt-get update
     sudo apt install -y python3.5
     command -v python3.5
     a=$(command -v python3.5)
