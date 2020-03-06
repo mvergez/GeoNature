@@ -1,5 +1,5 @@
 #!/bin/bash
-
+set -e
 set -x
 . install_all.ini
 . /etc/os-release

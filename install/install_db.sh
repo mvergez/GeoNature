@@ -343,7 +343,7 @@ then
         
         
         write_log "Inserting sample dataset of taxons for taxonomic schema..."
-
+    
         wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/taxhubdata_taxons_example.sql -P tmp/taxhub
         export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/taxhubdata_taxons_example.sql  &>> var/log/install_db.log
 
