@@ -75,5 +75,5 @@ ALTER TABLE ONLY gn_commons.t_soft_versions
 INSERT INTO gn_commons.t_soft_versions(id_soft, soft_code, soft_name, soft_installed_version, install_date, commentaire) VALUES
 (1,'UH', 'UsersHub', '2.1.1', now(), NULL)
 ,(2,'TH', 'TaxHub', '1.6.5', now(), NULL)
-,(3,'GN', 'GeoNAture', '2.4.0', now(), NULL)
+,(3,'GN', 'GeoNature', '2.4.0', now(), NULL)
 ;

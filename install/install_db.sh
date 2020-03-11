@@ -1,360 +1,143 @@
 #!/bin/bash
+
+# On set une variable qui dit qu'on est en mode .sh
+export INSTALL_ENV="sh"
+
 currentdir=${PWD##*/}
 parentdir="$(dirname "$(pwd)")"
-if [ $currentdir != 'install' ]
+export APP_DIR=$parentdir
+
+if [ $currentdir != "install" ]
 then
-    echo 'Please run the script from the install directory'
+    echo "Please run the script from the install directory"
     exit
 fi
 
 cd ../
 # Make sure root cannot run our script
-if [ "$(id -u)" == "0" ]; then
-   echo "This script must NOT be run as root" 1>&2
+if [ "$(id -u)" != "0" ]; then
+   echo "This script must be run as root" 1>&2
    exit 1
 fi
 
-. config/settings.ini
+set -e
 
-if [ ! -d 'tmp' ]
+# A factoriser
+####################
+# PARTIE VARIABLES #
+####################
+  
+# export POSTGRES_HOST=$db_host
+# export POSTGRES_PORT=$db_port
+# export POSTGRES_USER=$user_pg
+# export POSTGRES_PASSWORD=$user_pg_pass
+# export POSTGRES_DB=$db_name
+# export POSTGRES_LOCALE=$my_local
+# export NOMENCLATURE_LANGUAGE=$default_language
+# export LOCAL_SRID=$srid_local
+# read -p 'Add UsersHub sample data [true] or [false]: ' ADD_USERSHUB_SAMPLE_DATA
+# export ADD_USERSHUB_SAMPLE_DATA=$ADD_USERSHUB_SAMPLE_DATA
+# read -p 'Populate ref_geo with french municipalities [true] or [false]: ' REFGEO_MUNICIPALITY
+# export REFGEO_MUNICIPALITY=$REFGEO_MUNICIPALITY
+# read -p 'Populate ref_geo with french grids (1*1km, 5*5km, 10*10km) [true] or [false]: ' REFGEO_GRID
+# export REFGEO_GRID=$REFGEO_GRID
+# read -p 'Populate ref_geo with french dem (mnt with 250 m grid) [true] or [false]: ' REFGEO_DEM
+# export REFGEO_DEM=$REFGEO_DEM
+# read -p 'Vectorize dem (improve performance but take time) [true] or [false]: ' REFGEO_VECTORISE_DEM
+# export REFGEO_VECTORISE_DEM=$REFGEO_VECTORISE_DEM
+# read -p 'Add geonature sample data [true] or [false]: ' SAMPLE_DATA
+# export SAMPLE_DATA=$SAMPLE_DATA
+
+if [ $INSTALL_ENV = "sh" ]
 then
-  mkdir tmp
-fi
+    . install_db_functions.sh
+    CONFIG_FILE=config/settings.ini
+    if [ -f "$CONFIG_FILE" ]
+    then
+        #read settings and set envvar
+        source "$CONFIG_FILE"
+        export $(grep -v "^#" "$CONFIG_FILE" | cut -d= -f1)
+        #TODO afficher les valeurs de settings et demander si on continue avec ça
 
-if [ ! -d 'tmp/geonature/' ]
-then
-  mkdir tmp/geonature
-fi
-
-if [ ! -d 'tmp/taxhub/' ]
-then
-  mkdir tmp/taxhub
-fi
-
-if [ ! -d 'tmp/nomenclatures/' ]
-then
-  mkdir tmp/nomenclatures
-fi
-
-if [ ! -d 'tmp/usershub/' ]
-then
-  mkdir tmp/usershub
-fi
-
-if [ ! -d 'var' ]
-then
-  mkdir var
-fi
-
-if [ ! -d 'var/log' ]
-then
-  mkdir var/log
-  chmod -R 775 var/log/
-fi
-
-function database_exists () {
-    # /!\ Will return false if psql can't list database. Edit your pg_hba.conf
-    # as appropriate.
-    if [ -z $1 ]
-        then
-        # Argument is null
-        return 0
     else
-        # Grep db name in the list of database
-        sudo -u postgres -s -- psql -tAl | grep -q "^$1|"
-        return $?
+        echo "config/settings.ini file doesn't exist. Create and populate it before continue."
+        exit 1
     fi
-}
 
-function write_log() {
-    echo $1
-    echo "" &>> var/log/install_db.log
-    echo "" &>> var/log/install_db.log
-    echo "--------------------" &>> var/log/install_db.log
-    echo $1 &>> var/log/install_db.log
-    echo "--------------------" &>> var/log/install_db.log
-}
-
-
-if database_exists $db_name
+elif [ $INSTALL_ENV = "deb" ]
 then
-        if $drop_apps_db
-            then
-            echo "Drop database..."
-            sudo -u postgres -s dropdb $db_name
-        else
-            echo "Database exists but the settings file indicate that we don't have to drop it."
-        fi
+    function get_var () {
+        db_get geonature-db/POSTGRES_PORT
+        export POSTGRES_PORT="$RET"
+        db_get geonature-db/POSTGRES_USER
+        export POSTGRES_USER="$RET"
+        db_get geonature-db/POSTGRES_PASSWORD
+        export POSTGRES_PASSWORD="$RET"
+        export POSTGRES_HOST="localhost"
+        db_get geonature-db/POSTGRES_DB
+        export POSTGRES_DB="$RET"
+        db_get geonature-db/POSTGRES_LOCALE
+        export POSTGRES_LOCALE="$RET"
+        db_get geonature-db/NOMENCLATURE_LANGUAGE
+        export NOMENCLATURE_LANGUAGE="$RET"
+        db_get geonature-db/LOCAL_SRID
+        export LOCAL_SRID="$RET"
+        db_get geonature-db/ADD_USERSHUB_SAMPLE_DATA
+        export ADD_USERSHUB_SAMPLE_DATA="$RET"
+        db_get geonature-db/REFGEO_MUNICIPALITY
+        export REFGEO_MUNICIPALITY="$RET"
+        db_get geonature-db/REFGEO_GRID
+        export REFGEO_GRID="$RET"
+        db_get geonature-db/REFGEO_DEM
+        export REFGEO_DEM="$RET"
+        db_get geonature-db/REFGEO_VECTORISE_DEM
+        export REFGEO_VECTORISE_DEM="$RET"
+        db_get geonature-db/SAMPLE_DATA
+        export SAMPLE_DATA="$RET"
+    }
+
+    function generate_config () {
+        # Generate config files
+        get_var
+        echo "Generate configuration" >&2
+        CONF_DIR=/etc/geonature
+        for f in "geonature-db.conf"; do
+            envsubst <$CONF_DIR/$f.init >$CONF_DIR/$f
+        done
+    }
+
+    . /usr/share/debconf/confmodule
+    . /usr/share/geonature/geonature-db/install_db_functions.sh
+
+    # Environnement settings
+    export SCRIPT_PATH=/usr/share/geonature/geonature-db/sql
+    export LOG_PATH=/var/log/geonature/geonature-db
+
+    # PG settings
+    if [ -f /usr/share/debconf/confmodule ]; then
+        db_version 2.0
+        db_input high geonature-db/POSTGRES_PORT || true
+        db_input high geonature-db/POSTGRES_USER || true
+        db_input high geonature-db/POSTGRES_PASSWORD || true
+        db_go
+    fi
+    get_var
+
+else
+    echo "Pas d'environnement d'installation identifié"
+    exit 1
 fi
 
-if ! database_exists $db_name
+prepare_path
+
+if database_exists ${POSTGRES_DB}
 then
-    echo "--------------------" &> var/log/install_db.log
-    write_log "Creating GeoNature database..."
-    sudo -n -u postgres -s createdb -O $user_pg $db_name -T template0 -E UTF-8 -l $my_local
-    write_log "Adding PostGIS and other use PostgreSQL extensions"
-    sudo -n -u postgres -s psql -d $db_name -c "CREATE EXTENSION IF NOT EXISTS postgis;" &>> var/log/install_db.log
-    sudo -n -u postgres -s psql -d $db_name -c "CREATE EXTENSION IF NOT EXISTS hstore;" &>> var/log/install_db.log
-    sudo -n -u postgres -s psql -d $db_name -c "CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog; COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';" &>> var/log/install_db.log
-    sudo -n -u postgres -s psql -d $db_name -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' &>> var/log/install_db.log
-    sudo -n -u postgres -s psql -d $db_name -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;" &>> var/log/install_db.log
+    echo "Database exists we don't have to drop it. Choise migrate, drop it manualy or change database name."
+fi
 
-
-    # Mise en place de la structure de la base et des données permettant son fonctionnement avec l'application
-    echo "GRANT..."
-    cp data/grant.sql tmp/geonature/grant.sql
-    sudo sed -i "s/MYPGUSER/$user_pg/g" tmp/geonature/grant.sql
-    write_log 'GRANT'
-    sudo -n -u postgres -s psql -d $db_name -f tmp/geonature/grant.sql &>> var/log/install_db.log
-
-    write_log "Creating 'public' functions..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/public.sql  &>> var/log/install_db.log
-
-    if [ "$install_usershub_schema" = true ];
-     then
-        write_log "Getting and creating USERS schema (utilisateurs).."
-        wget https://raw.githubusercontent.com/PnEcrins/UsersHub/$usershub_release/data/usershub.sql -P tmp/usershub
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/usershub/usershub.sql  &>> var/log/install_db.log
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/usershub/usershub_api.sql  &>> var/log/install_db.log
-        
-        write_log "Insert minimal data (utilisateurs)"
-        wget https://raw.githubusercontent.com/PnEcrins/UsersHub/$usershub_release/data/usershub-data.sql -P tmp/usershub
-        wget https://raw.githubusercontent.com/PnEcrins/UsersHub/$usershub_release/data/usershub-dataset.sql -P tmp/usershub
-        wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/adds_for_usershub.sql -P tmp/taxhub
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/usershub/usershub-data.sql  &>> var/log/install_db.log
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/usershub/usershub-dataset.sql  &>> var/log/install_db.log
-        write_log "Insertion of data for usershub..."
-        # insert geonature data for usershub
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/utilisateurs/adds_for_usershub.sql  &>> var/log/install_db.log
-        # fisrt insert taxhub data for usershub
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/adds_for_usershub.sql  &>> var/log/install_db.log
-        
-    fi
-
-    echo "Download and extract taxref file..."
-
-    wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/inpn/data_inpn_taxhub.sql -P tmp/taxhub
-
-    # sed to replace /tmp/taxhub to ~/<geonature_dir>/tmp.taxhub
-    sed -i 's#'/tmp/taxhub'#'$parentdir/tmp/taxhub'#g' tmp/taxhub/data_inpn_taxhub.sql
-    
-
-    array=( TAXREF_INPN_v11.zip ESPECES_REGLEMENTEES_v11.zip LR_FRANCE_20160000.zip )
-    for i in "${array[@]}"
-    do
-      if [ ! -f 'tmp/taxhub/'$i ]
-      then
-          wget http://geonature.fr/data/inpn/taxonomie/$i -P tmp/taxhub
-      else
-          echo $i exists
-      fi
-      unzip tmp/taxhub/$i -d tmp/taxhub
-    done
-
-    echo "Getting 'taxonomie' schema creation scripts..."
-    wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/taxhubdb.sql -P tmp/taxhub
-    wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/taxhubdata.sql -P tmp/taxhub
-    wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/taxhubdata_atlas.sql -P tmp/taxhub
-    wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/materialized_views.sql -P tmp/taxhub
-
-    write_log "Creating 'taxonomie' schema..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/taxhubdb.sql  &>> var/log/install_db.log
-    write_log "Inserting INPN taxonomic data... (This may take a few minutes)"
-    sudo -n -u postgres -s psql -d $db_name -f tmp/taxhub/data_inpn_taxhub.sql &>> var/log/install_db.log
-
-    write_log "Creating dictionaries data for taxonomic schema..."
-
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/taxhubdata.sql  &>> var/log/install_db.log
-
-    write_log "Inserting sample dataset  - atlas attributes...."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/taxhubdata_atlas.sql  &>> var/log/install_db.log
-
-    write_log "Creating a view that represent the taxonomic hierarchy..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/materialized_views.sql  &>> var/log/install_db.log
-
-
-    echo "Download and extract habref file..."
-    if [ ! -d 'tmp/habref/' ]
-    then
-        mkdir tmp/habref
-    fi
-    if [ ! -f 'tmp/habref/HABREF_50.zip' ]
-    then
-      wget https://geonature.fr/data/inpn/habitats/HABREF_50.zip -P tmp/habref
-    else
-      echo HABREF_40.zip exists
-    fi
-    unzip tmp/habref/HABREF_50.zip -d tmp/habref
-    
-    wget https://raw.githubusercontent.com/PnX-SI/Habref-api-module/$habref_api_release/src/pypn_habref_api/data/habref.sql -P tmp/habref
-    wget https://raw.githubusercontent.com/PnX-SI/Habref-api-module/$habref_api_release/src/pypn_habref_api/data/data_inpn_habref.sql -P tmp/habref 
-
-    # sed to replace /tmp/taxhub to ~/<geonature_dir>/tmp.taxhub
-    sed -i 's#'/tmp/habref'#'$parentdir/tmp/habref'#g' tmp/habref/data_inpn_habref.sql
-
-    write_log "Creating 'habitat' schema..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/habref/habref.sql &>> var/log/install_db.log
-
-    write_log "Inserting INPN habitat data..."
-    sudo -u postgres -s psql -d $db_name  -f tmp/habref/data_inpn_habref.sql &>> var/log/install_db.log
-
-
-    echo "Getting 'nomenclature' schema creation scripts..."
-    wget --no-cache --no-cookies https://raw.githubusercontent.com/PnX-SI/Nomenclature-api-module/$nomenclature_release/data/nomenclatures.sql -P tmp/nomenclatures
-    wget --no-cache --no-cookies https://raw.githubusercontent.com/PnX-SI/Nomenclature-api-module/$nomenclature_release/data/data_nomenclatures.sql -P tmp/nomenclatures
-    wget https://raw.githubusercontent.com/PnX-SI/Nomenclature-api-module/$nomenclature_release/data/nomenclatures_taxonomie.sql -P tmp/nomenclatures
-    wget https://raw.githubusercontent.com/PnX-SI/Nomenclature-api-module/$nomenclature_release/data/data_nomenclatures_taxonomie.sql -P tmp/nomenclatures
-
-    write_log "Creating 'nomenclatures' schema"
-
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/nomenclatures/nomenclatures.sql  &>> var/log/install_db.log
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/nomenclatures/nomenclatures_taxonomie.sql  &>> var/log/install_db.log
-
-    write_log "Inserting 'nomenclatures' data..."
-
-    sudo sed -i "s/MYDEFAULTLANGUAGE/$default_language/g" tmp/nomenclatures/data_nomenclatures.sql
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/nomenclatures/data_nomenclatures.sql  &>> var/log/install_db.log
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/nomenclatures/data_nomenclatures_taxonomie.sql  &>> var/log/install_db.log
-
-    write_log "Creating 'commons' schema..."
-    cp data/core/commons.sql tmp/geonature/commons.sql
-    sudo sed -i "s/MYLOCALSRID/$srid_local/g" tmp/geonature/commons.sql
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/geonature/commons.sql  &>> var/log/install_db.log
-
-    write_log "Creating 'meta' schema..."
-
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/meta.sql  &>> var/log/install_db.log
-
-    write_log "Creating 'ref_geo' schema..."
-    cp data/core/ref_geo.sql tmp/geonature/ref_geo.sql
-    sudo sed -i "s/MYLOCALSRID/$srid_local/g" tmp/geonature/ref_geo.sql
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/geonature/ref_geo.sql  &>> var/log/install_db.log
-
-    if [ "$install_sig_layers" = true ];
-    then
-        write_log "Insert default French municipalities (IGN admin-express)"
-        if [ ! -f 'tmp/geonature/communes_fr_admin_express_2019-01.zip' ]
-        then
-            wget  --cache=off http://geonature.fr/data/ign/communes_fr_admin_express_2019-01.zip -P tmp/geonature
-        else
-            echo "tmp/geonature/communes_fr_admin_express_2019-01.zip already exist"
-        fi
-        unzip tmp/geonature/communes_fr_admin_express_2019-01.zip -d tmp/geonature
-        sudo -n -u postgres -s psql -d $db_name -f tmp/geonature/fr_municipalities.sql &>> var/log/install_db.log
-        write_log "Restore $user_pg owner"
-        sudo -n -u postgres -s psql -d $db_name -c "ALTER TABLE ref_geo.temp_fr_municipalities OWNER TO $user_pg;" &>> var/log/install_db.log
-        write_log "Insert data in l_areas and li_municipalities tables"
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/ref_geo_municipalities.sql  &>> var/log/install_db.log
-        write_log "Drop french municipalities temp table"
-        sudo -n -u postgres -s psql -d $db_name -c "DROP TABLE ref_geo.temp_fr_municipalities;" &>> var/log/install_db.log
-    fi
-
-    if [ "$install_grid_layer" = true ];
-    then
-        write_log "Insert INPN grids"
-        if [ ! -f 'tmp/geonature/inpn_grids.zip' ]
-        then
-            wget  --cache=off https://geonature.fr/data/inpn/layers/2019/inpn_grids.zip -P tmp/geonature
-        else
-            echo "tmp/geonature/inpn_grids.zip already exist"
-        fi
-        unzip tmp/geonature/inpn_grids.zip -d tmp/geonature
-        write_log "Insert grid layers... (This may take a few minutes)"
-        sudo -n -u postgres -s psql -d $db_name -f tmp/geonature/inpn_grids.sql &>> var/log/install_db.log
-        write_log "Restore $user_pg owner"
-        sudo -n -u postgres -s psql -d $db_name -c "ALTER TABLE ref_geo.temp_grids_1 OWNER TO $user_pg;" &>> var/log/install_db.log
-        sudo -n -u postgres -s psql -d $db_name -c "ALTER TABLE ref_geo.temp_grids_5 OWNER TO $user_pg;" &>> var/log/install_db.log
-        sudo -n -u postgres -s psql -d $db_name -c "ALTER TABLE ref_geo.temp_grids_10 OWNER TO $user_pg;" &>> var/log/install_db.log
-        write_log "Insert data in l_areas and li_grids tables"
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/ref_geo_grids.sql  &>> var/log/install_db.log
-    fi
-
-    if  [ "$install_default_dem" = true ];
-    then
-        write_log "Insert default French DEM (IGN 250m BD alti)"
-        if [ ! -f 'tmp/geonature/BDALTIV2_2-0_250M_ASC_LAMB93-IGN69_FRANCE_2017-06-21.zip' ]
-        then
-            wget --cache=off http://geonature.fr/data/ign/BDALTIV2_2-0_250M_ASC_LAMB93-IGN69_FRANCE_2017-06-21.zip -P tmp/geonature
-        else
-            echo "tmp/geonature/BDALTIV2_2-0_250M_ASC_LAMB93-IGN69_FRANCE_2017-06-21.zip already exist"
-        fi
-	      unzip tmp/geonature/BDALTIV2_2-0_250M_ASC_LAMB93-IGN69_FRANCE_2017-06-21.zip -d tmp/geonature
-        #gdalwarp -t_srs EPSG:$srid_local tmp/geonature/BDALTIV2_250M_FXX_0098_7150_MNT_LAMB93_IGN69.asc tmp/geonature/dem.tif &>> var/log/install_db.log
-        export PGPASSWORD=$user_pg_pass;raster2pgsql -s $srid_local -c -C -I -M -d -t 5x5 tmp/geonature/BDALTIV2_250M_FXX_0098_7150_MNT_LAMB93_IGN69.asc ref_geo.dem|psql -h $db_host -U $user_pg -d $db_name  &>> var/log/install_db.log
-    	#echo "Refresh DEM spatial index. This may take a few minutes..."
-        sudo -n -u postgres -s psql -d $db_name -c "REINDEX INDEX ref_geo.dem_st_convexhull_idx;" &>> var/log/install_db.log
-        if [ "$vectorise_dem" = true ];
-        then
-            write_log "Vectorisation of DEM raster. This may take a few minutes..."
-            sudo -n -u postgres -s psql -d $db_name -c "INSERT INTO ref_geo.dem_vector (geom, val) SELECT (ST_DumpAsPolygons(rast)).* FROM ref_geo.dem;" &>> var/log/install_db.log
-            
-            write_log "Refresh DEM vector spatial index. This may take a few minutes..."
-            sudo -n -u postgres -s psql -d $db_name -c "REINDEX INDEX ref_geo.index_dem_vector_geom;" &>> var/log/install_db.log
-        fi
-    fi
-
-    write_log "Creating 'imports' schema..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/imports.sql  &>> var/log/install_db.log
-
-
-    write_log "Creating 'synthese' schema..."
-    cp data/core/synthese.sql tmp/geonature/synthese.sql
-    sudo sed -i "s/MYLOCALSRID/$srid_local/g" tmp/geonature/synthese.sql
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/geonature/synthese.sql  &>> var/log/install_db.log
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/synthese_default_values.sql  &>> var/log/install_db.log
-
-    write_log "Creating commons view depending of synthese"
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/commons_synthese.sql  &>> var/log/install_db.log
-
-    write_log "Creating 'exports' schema..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/exports.sql  &>> var/log/install_db.log
-
-
-    write_log "Creating 'monitoring' schema..."
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -v MYLOCALSRID=$srid_local -f data/core/monitoring.sql  &>> var/log/install_db.log
-
-    write_log "Creating 'permissions' schema"
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/permissions.sql  &>> var/log/install_db.log
-
-    write_log "Insert 'permissions' data"
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/permissions_data.sql  &>> var/log/install_db.log
-
-    export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/sensitivity.sql  &>> var/log/install_db.log
-    
-    write_log "Insert 'gn_sensitivity' data"
-    echo "--------------------"
-    if [ ! -f 'tmp/geonature/181201_referentiel_donnes_sensibles.csv' ]
-        then
-            wget --cache=off https://geonature.fr/data/inpn/sensitivity/181201_referentiel_donnes_sensibles.csv -P tmp/geonature
-        else
-            echo "tmp/geonature/181201_referentiel_donnes_sensibles.csv already exist"
-    fi
-    cp data/core/sensitivity_data.sql tmp/geonature/sensitivity_data.sql
-    sed -i 's#'/tmp/geonature'#'$parentdir/tmp/geonature'#g' tmp/geonature/sensitivity_data.sql
-    echo "Insert 'gn_sensitivity' data... (This may take a few minutes)"
-    sudo -n -u postgres -s psql -d $db_name -f tmp/geonature/sensitivity_data.sql &>> var/log/install_db.log
-
-
-    #Installation des données exemples
-    if [ "$add_sample_data" = true ];
-    then
-        write_log "Inserting sample datasets..."
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f data/core/meta_data.sql  &>> var/log/install_db.log
-        
-        
-        write_log "Inserting sample dataset of taxons for taxonomic schema..."
-
-        wget https://raw.githubusercontent.com/PnX-SI/TaxHub/$taxhub_release/data/taxhubdata_taxons_example.sql -P tmp/taxhub
-        export PGPASSWORD=$user_pg_pass;psql -h $db_host -U $user_pg -d $db_name -f tmp/taxhub/taxhubdata_taxons_example.sql  &>> var/log/install_db.log
-
-    fi
-
-    if [ "$install_default_dem" = true ];
-    then
-        sudo rm tmp/geonature/BDALTIV2_250M_FXX_0098_7150_MNT_LAMB93_IGN69.asc
-        sudo rm tmp/geonature/IGNF_BDALTIr_2-0_ASC_250M_LAMB93_IGN69_FRANCE.html
-    fi
-
+if ! database_exists ${POSTGRES_DB}
+then
+    create_database
 fi
 
 # Suppression des fichiers : on ne conserve que les fichiers compressés
