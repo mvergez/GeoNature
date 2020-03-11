@@ -1,131 +1,111 @@
 #!/bin/bash
 
-# On set une variable qui dit qu'on est en mode .sh
-export INSTALL_ENV="sh"
+# CONSTANTE
+# DO NOT EDIT THIS CONSTANTE UNLESS YOU MAKE A RELEASE
+# Définir dans quelle version de UsersHub (release, branche ou tag) prendre le code SQL permettant la création du schéma utilisateurs de la base de données de GeoNature
+USERSHUB_RELEASE=2.1.1
+# Définir dans quelle version de TaxHub (release, branche ou tag) prendre le code SQL permettant la création du schéma taxonomie de la base de données de GeoNature
+TAXHUB_RELEASE=1.6.5
+# Définir dans quelle version de Habref-api-module (release, branche ou tag) prendre le code SQL permettant la création du schéma ref_habitats de la base de données de GeoNature
+HABREF_API_RELEASE=0.1.2
+# Définir dans quelle version du sous-module des nomenclatures (release, branche ou tag) prendre le code SQL permettant la création du schéma 'ref_nomenclatures' de la base de données GeoNature
+NOMENCLATURE_RELEASE=1.3.2
 
-currentdir=${PWD##*/}
-parentdir="$(dirname "$(pwd)")"
-export APP_DIR=$parentdir
+set -e
 
-if [ $currentdir != "install" ]
-then
-    echo "Please run the script from the install directory"
-    exit
-fi
+. install_functions.sh
+. install_db_functions.sh
 
-cd ../
+GN_SCRIPT_PATH=$(get_path_to_script)
+GN_CUR_DIR=$(dirname "$GN_SCRIPT_PATH")
+GN_PARENT_DIR=$(dirname "$GN_CUR_DIR")
+GN_SQL_SCRIPTS_DIR=${SQL_SCRIPTS_DIR:-"$GN_PARENT_DIR/data"}
+GN_LOG_DIR=${GN_LOG_DIR:-"$GN_PARENT_DIR/var/log/geonature-db"}
+INSTALL_SCRIPTS_DIR=${INSTALL_SCRIPTS_DIR:-"$GN_CUR_DIR"}
+
+DB_CONFIG_FILE_PATH="$GN_PARENT_DIR/config/settings.ini" # TODO voir on le laisse ici
+
+# On se positionne à la racine du répertoire geonature
+cd "$PARENT_DIR";
+
 # Make sure root cannot run our script
 if [ "$(id -u)" != "0" ]; then
    echo "This script must be run as root" 1>&2
    exit 1
 fi
 
-set -e
-
-# A factoriser
-####################
-# PARTIE VARIABLES #
-####################
-  
-# export POSTGRES_HOST=$db_host
-# export POSTGRES_PORT=$db_port
-# export POSTGRES_USER=$user_pg
-# export POSTGRES_PASSWORD=$user_pg_pass
-# export POSTGRES_DB=$db_name
-# export POSTGRES_LOCALE=$my_local
-# export NOMENCLATURE_LANGUAGE=$default_language
-# export LOCAL_SRID=$srid_local
-# read -p 'Add UsersHub sample data [true] or [false]: ' ADD_USERSHUB_SAMPLE_DATA
-# export ADD_USERSHUB_SAMPLE_DATA=$ADD_USERSHUB_SAMPLE_DATA
-# read -p 'Populate ref_geo with french municipalities [true] or [false]: ' REFGEO_MUNICIPALITY
-# export REFGEO_MUNICIPALITY=$REFGEO_MUNICIPALITY
-# read -p 'Populate ref_geo with french grids (1*1km, 5*5km, 10*10km) [true] or [false]: ' REFGEO_GRID
-# export REFGEO_GRID=$REFGEO_GRID
-# read -p 'Populate ref_geo with french dem (mnt with 250 m grid) [true] or [false]: ' REFGEO_DEM
-# export REFGEO_DEM=$REFGEO_DEM
-# read -p 'Vectorize dem (improve performance but take time) [true] or [false]: ' REFGEO_VECTORISE_DEM
-# export REFGEO_VECTORISE_DEM=$REFGEO_VECTORISE_DEM
-# read -p 'Add geonature sample data [true] or [false]: ' SAMPLE_DATA
-# export SAMPLE_DATA=$SAMPLE_DATA
-
-if [ $INSTALL_ENV = "sh" ]
+if [ -f $DB_CONFIG_FILE_PATH ]
 then
-    . install_db_functions.sh
-    CONFIG_FILE=config/settings.ini
-    if [ -f "$CONFIG_FILE" ]
-    then
-        #read settings and set envvar
-        source "$CONFIG_FILE"
-        export $(grep -v "^#" "$CONFIG_FILE" | cut -d= -f1)
-        #TODO afficher les valeurs de settings et demander si on continue avec ça
-
-    else
-        echo "config/settings.ini file doesn't exist. Create and populate it before continue."
-        exit 1
-    fi
-
-elif [ $INSTALL_ENV = "deb" ]
-then
-    function get_var () {
-        db_get geonature-db/POSTGRES_PORT
-        export POSTGRES_PORT="$RET"
-        db_get geonature-db/POSTGRES_USER
-        export POSTGRES_USER="$RET"
-        db_get geonature-db/POSTGRES_PASSWORD
-        export POSTGRES_PASSWORD="$RET"
-        export POSTGRES_HOST="localhost"
-        db_get geonature-db/POSTGRES_DB
-        export POSTGRES_DB="$RET"
-        db_get geonature-db/POSTGRES_LOCALE
-        export POSTGRES_LOCALE="$RET"
-        db_get geonature-db/NOMENCLATURE_LANGUAGE
-        export NOMENCLATURE_LANGUAGE="$RET"
-        db_get geonature-db/LOCAL_SRID
-        export LOCAL_SRID="$RET"
-        db_get geonature-db/ADD_USERSHUB_SAMPLE_DATA
-        export ADD_USERSHUB_SAMPLE_DATA="$RET"
-        db_get geonature-db/REFGEO_MUNICIPALITY
-        export REFGEO_MUNICIPALITY="$RET"
-        db_get geonature-db/REFGEO_GRID
-        export REFGEO_GRID="$RET"
-        db_get geonature-db/REFGEO_DEM
-        export REFGEO_DEM="$RET"
-        db_get geonature-db/REFGEO_VECTORISE_DEM
-        export REFGEO_VECTORISE_DEM="$RET"
-        db_get geonature-db/SAMPLE_DATA
-        export SAMPLE_DATA="$RET"
-    }
-
-    function generate_config () {
-        # Generate config files
-        get_var
-        echo "Generate configuration" >&2
-        CONF_DIR=/etc/geonature
-        for f in "geonature-db.conf"; do
-            envsubst <$CONF_DIR/$f.init >$CONF_DIR/$f
-        done
-    }
-
-    . /usr/share/debconf/confmodule
-    . /usr/share/geonature/geonature-db/install_db_functions.sh
-
-    # Environnement settings
-    export SCRIPT_PATH=/usr/share/geonature/geonature-db/sql
-    export LOG_PATH=/var/log/geonature/geonature-db
-
-    # PG settings
-    if [ -f /usr/share/debconf/confmodule ]; then
-        db_version 2.0
-        db_input high geonature-db/POSTGRES_PORT || true
-        db_input high geonature-db/POSTGRES_USER || true
-        db_input high geonature-db/POSTGRES_PASSWORD || true
-        db_go
-    fi
-    get_var
-
+    get_config $DB_CONFIG_FILE_PATH
+    export GN_POSTGRES_HOST=$db_host
+    export GN_POSTGRES_PORT=$db_port
+    export GN_POSTGRES_USER=$user_pg
+    export GN_POSTGRES_PASSWORD=$user_pg_pass
+    export GN_POSTGRES_DB=$db_name
+    export GN_POSTGRES_LOCALE=$my_local
+    export GN_NOMENCLATURE_LANGUAGE=$default_language
+    export GN_LOCAL_SRID=$srid_local
+    export GN_ADD_USERSHUB_SAMPLE_DATA=${GN_ADD_USERSHUB_SAMPLE_DATA:-"true"}
+    export GN_REFGEO_MUNICIPALITY=$install_sig_layers
+    export GN_REFGEO_GRID=$install_grid_layer
+    export GN_REFGEO_DEM=$install_default_dem
+    export GN_REFGEO_VECTORISE_DEM=$vectorise_dem
+    export GN_SAMPLE_DATA=$add_sample_data
 else
-    echo "Pas d'environnement d'installation identifié"
-    exit 1
+    echo '\n== Please enter the configuration Geonature ==\n'
+    read -p 'Database host [default: 127.0.0.1]: ' GN_POSTGRES_HOST
+    export GN_POSTGRES_HOST=${GN_POSTGRES_HOST:-'127.0.0.1'}
+
+    read -p 'Database port: [default: 5432]: ' GN_POSTGRES_PORT
+    export GN_POSTGRES_PORT=${GN_POSTGRES_PORT:-'5432'}
+    
+    until [[ ! "$GN_POSTGRES_DB" == "" ]]; do
+        read -p "Database name: " GN_POSTGRES_DB
+    done
+    export GN_POSTGRES_DB
+
+    until [[ ! "$GN_POSTGRES_USER" == "" ]]; do
+        read -p "Database user: " GN_POSTGRES_USER
+    done
+    export GN_POSTGRES_USER
+
+    while true; do
+        password=""
+        repeat_password=""
+        until [[ "$password" != "" ]]; do
+            read -p "Database password: " password
+        done
+        until [[ "$repeat_password" != "" ]]; do
+            read -p "Repeat database password: " repeat_password
+        done
+        if [[ "$password" != "$repeat_password" ]]; then
+            echo -e "${START_RED}Passwords don't match. Please try again.${END_RED}"
+        else 
+            export GN_POSTGRES_PASSWORD="$password"
+            break
+        fi
+    done
+
+    read -p 'Database locale [default: fr_FR.UTF-8]: ' GN_POSTGRES_LOCALE
+    export GN_POSTGRES_LOCALE=${GN_POSTGRES_LOCALE:-'fr_FR.UTF-8'}
+
+    read -p 'Nomenclature language [fr/it/de...? default: fr]: ' GN_NOMENCLATURE_LANGUAGE
+    export GN_NOMENCLATURE_LANGUAGE=${GN_NOMENCLATURE_LANGUAGE:-'fr'}
+
+    read -p 'Local SRID [default: 2154]: ' GN_LOCAL_SRID
+    export GN_LOCAL_SRID=${GN_LOCAL_SRID:-'2154'}
+    
+    export GN_ADD_USERSHUB_SAMPLE_DATA=$(prompt_yes_no "Add userhub sample data ? (Recommanded)")
+ 
+    export GN_REFGEO_MUNICIPALITY=$(prompt_yes_no "Do you want to populate the municipality db table ? (Recommanded)")
+
+    export GN_REFGEO_GRID=$(prompt_yes_no "Do you want to add the INPM grid layers in DB (grids 1*1, 5*5 and 10*10km)? (Recommanded)")
+
+    export GN_REFGEO_DEM=$(prompt_yes_no "Do you want install french DEM layer (MNT 250m) ? (Recommanded)")
+
+    export GN_REFGEO_VECTORISE_DEM=$(prompt_yes_no "Do you want to vectorize DEM layer ? (Recommanded)")
+
+    export GN_SAMPLE_DATA=$(prompt_yes_no "Add GeoNature sample data ? (Recommanded)")
 fi
 
 prepare_path
