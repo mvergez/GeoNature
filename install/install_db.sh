@@ -1,40 +1,43 @@
 #!/bin/bash
 
-# CONSTANTS
-# DO NOT EDIT THIS CONSTANTS UNLESS YOU MAKE A RELEASE
-# Définir dans quelle version de UsersHub (release, branche ou tag) prendre le code SQL permettant la création du schéma utilisateurs de la base de données de GeoNature
-USERSHUB_RELEASE=2.1.1
-# Définir dans quelle version de TaxHub (release, branche ou tag) prendre le code SQL permettant la création du schéma taxonomie de la base de données de GeoNature
-TAXHUB_RELEASE=1.6.5
-# Définir dans quelle version de Habref-api-module (release, branche ou tag) prendre le code SQL permettant la création du schéma ref_habitats de la base de données de GeoNature
-HABREF_API_RELEASE=0.1.2
-# Définir dans quelle version du sous-module des nomenclatures (release, branche ou tag) prendre le code SQL permettant la création du schéma 'ref_nomenclatures' de la base de données GeoNature
-# NOMENCLATURE_RELEASE=develop
-NOMENCLATURE_RELEASE=1.3.2
-
 set -e
 
 . install_functions.sh
 . install_db_functions.sh
 
-# GN_SCRIPT_PATH=$(get_path_to_script)
-GN_CUR_DIR=${PWD##*/}
-# GN_CUR_DIR=$(dirname "$GN_SCRIPT_PATH")
-GN_PARENT_DIR="$(dirname "$(pwd)")"
-GN_SQL_SCRIPTS_DIR=${GN_SQL_SCRIPTS_DIR:-"$GN_PARENT_DIR/data"}
-GN_LOG_DIR=${GN_LOG_DIR:-"$GN_PARENT_DIR/var/log/geonature-db"}
-# INSTALL_SCRIPTS_DIR=${INSTALL_SCRIPTS_DIR:-"$GN_CUR_DIR"}
 
-DB_CONFIG_FILE_PATH="$GN_PARENT_DIR/config/settings.ini" # TODO voir on le laisse ici
+# CONSTANTS
+# DO NOT EDIT THIS CONSTANTS UNLESS YOU MAKE A RELEASE
+# Définir dans quelle version de UsersHub (release, branche ou tag) prendre le code SQL permettant la création du schéma utilisateurs de la base de données de GeoNature
+export USERSHUB_RELEASE=2.1.1
+# Définir dans quelle version de TaxHub (release, branche ou tag) prendre le code SQL permettant la création du schéma taxonomie de la base de données de GeoNature
+export TAXHUB_RELEASE=1.6.5
+# Définir dans quelle version de Habref-api-module (release, branche ou tag) prendre le code SQL permettant la création du schéma ref_habitats de la base de données de GeoNature
+export HABREF_API_RELEASE=0.1.2
+# Définir dans quelle version du sous-module des nomenclatures (release, branche ou tag) prendre le code SQL permettant la création du schéma 'ref_nomenclatures' de la base de données GeoNature
+# NOMENCLATURE_RELEASE=develop
+export NOMENCLATURE_RELEASE=1.3.2
+
+# GN_SCRIPT_PATH=$(get_path_to_script)
+# GN_CUR_DIR=${PWD##*/}
+export GN_CUR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+export GN_PARENT_DIR="$(dirname "$GN_CUR_DIR")"
+export GN_SQL_SCRIPTS_DIR="$GN_PARENT_DIR/data"
+export GN_LOG_DIR="$GN_PARENT_DIR/var/log/geonature-db"
+# INSTALL_SCRIPTS_DIR=${INSTALL_SCRIPTS_DIR:-"$GN_CUR_DIR"}
+export GN_MIGRATION_SCRIPTS_DIR="$GN_PARENT_DIR/data/migrations"
+
+export DB_CONFIG_FILE_PATH="$GN_PARENT_DIR/config/settings.ini" # TODO voir on le laisse ici
 
 # On se positionne à la racine du répertoire geonature
 cd "$PARENT_DIR";
 
 # Make sure root cannot run our script
-if [ "$(id -u)" != "0" ]; then
-   echo "This script must be run as root" 1>&2
-   exit 1
-fi
+# if [ "$(id -u)" != "0" ]; then
+#    echo "This script must be run as root" 1>&2
+# #    exit 1
+#    return
+# fi
 
 if [ -f $DB_CONFIG_FILE_PATH ]
 then
@@ -81,7 +84,7 @@ else
             read -p -s "Repeat database password: " repeat_password
         done
         if [[ "$password" != "$repeat_password" ]]; then
-            echo -e "${START_RED}Passwords don't match. Please try again.${END_RED}"
+            printf -e "${START_RED}Passwords don't match. Please try again.${END_RED}\n"
         else 
             export GN_POSTGRES_PASSWORD="$password"
             break
@@ -111,24 +114,39 @@ else
 
     generate_config
 fi
-#TODO : test
+
 create_role
 
 if database_exists ${GN_POSTGRES_DB}
 then
-    echo "${START_RED}Database exists we don't have to drop it. Choise migrate, drop it manualy or change database name.${END_RED}"
+    printf "${START_ORANGE}WARNING : Database exists we don't have to drop it. Choise migrate, drop it manualy or change database name.${NC}\n"
+    migr=$(prompt_yes_no "Do you want to apply migration script ?")
+    if [ "$migr" = true ];
+    then
+        #lancement de migrate_db.sh
+        . migration/migrate_db_functions.sh
+        apply_missing_migrations
+        exit 0
+    else
+        echo "Nothing was doing. Do it yourself !"
+    fi
 else
     create_database
 fi
 
 # Suppression des fichiers : on ne conserve que les fichiers compressés
-echo "Cleaning files..."
-rm tmp/geonature/*.sql
-rm tmp/usershub/*.sql
-rm tmp/taxhub/*.txt
-rm tmp/taxhub/*.sql
-rm tmp/taxhub/*.csv
-rm tmp/habref/*.csv
-rm tmp/habref/*.pdf
-rm tmp/habref/*.sql
-rm tmp/nomenclatures/*.sql
+clean=$(prompt_yes_no "Do you want to clean temporary files ?")
+if [ "$migr" = true ];
+then
+    echo "Cleaning files..."
+    #TODO checker les fichiers à supprimer
+    rm tmp/geonature/*.sql
+    rm tmp/usershub/*.sql
+    rm tmp/taxhub/*.txt
+    rm tmp/taxhub/*.sql
+    rm tmp/taxhub/*.csv
+    rm tmp/habref/*.csv
+    rm tmp/habref/*.pdf
+    rm tmp/habref/*.sql
+    rm tmp/nomenclatures/*.sql
+fi

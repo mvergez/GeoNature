@@ -1,6 +1,7 @@
 
-START_RED="\e[31m"
-END_RED="\e[0m"
+START_RED="\033[0;31m"
+START_ORANGE="\033[0;33m"
+NC="\033[0m"
 
 function get_path_to_script(){
     source="${BASH_SOURCE[0]}"
@@ -45,4 +46,9 @@ prompt_yes_no(){
             * ) echo "Please answer yes or no.";;
         esac
     done
+}
+
+function pg_query(){
+    export PGPASSWORD=$GN_POSTGRES_PASSWORD
+    psql -t -h $GN_POSTGRES_HOST -U $GN_POSTGRES_USER -d $GN_POSTGRES_DB -c "$1"
 }
