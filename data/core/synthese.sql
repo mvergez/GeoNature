@@ -172,7 +172,7 @@ CREATE TABLE synthese (
     altitude_max integer,
     the_geom_4326 public.geometry(Geometry,4326),
     the_geom_point public.geometry(Point,4326),
-    the_geom_local public.geometry(Geometry,MYLOCALSRID),
+    the_geom_local public.geometry(Geometry,:MYLOCALSRID),
     date_min timestamp without time zone NOT NULL,
     date_max timestamp without time zone NOT NULL,
     validator character varying(1000),
@@ -192,7 +192,7 @@ CREATE TABLE synthese (
     CONSTRAINT enforce_dims_the_geom_point CHECK ((public.st_ndims(the_geom_point) = 2)),
     CONSTRAINT enforce_geotype_the_geom_point CHECK (((public.geometrytype(the_geom_point) = 'POINT'::text) OR (the_geom_point IS NULL))),
     CONSTRAINT enforce_srid_the_geom_4326 CHECK ((public.st_srid(the_geom_4326) = 4326)),
-    CONSTRAINT enforce_srid_the_geom_local CHECK ((public.st_srid(the_geom_local) = MYLOCALSRID)),
+    CONSTRAINT enforce_srid_the_geom_local CHECK ((public.st_srid(the_geom_local) = :MYLOCALSRID)),
     CONSTRAINT enforce_srid_the_geom_point CHECK ((public.st_srid(the_geom_point) = 4326))
 );
 COMMENT ON TABLE synthese IS 'Table de synthèse destinée à recevoir les données de tous les protocoles. Pour consultation uniquement';
@@ -502,7 +502,7 @@ s as (
 ,loc AS (
   SELECT cd_ref,
 	count(*) AS nbobs,
-	public.ST_Transform(public.ST_SetSRID(public.box2d(public.ST_extent(s.the_geom_local))::geometry,MYLOCALSRID), 4326) AS bbox4326
+	public.ST_Transform(public.ST_SetSRID(public.box2d(public.ST_extent(s.the_geom_local))::geometry,:MYLOCALSRID), 4326) AS bbox4326
   FROM  s
   GROUP BY cd_ref
 )

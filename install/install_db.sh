@@ -9,6 +9,7 @@ TAXHUB_RELEASE=1.6.5
 # Définir dans quelle version de Habref-api-module (release, branche ou tag) prendre le code SQL permettant la création du schéma ref_habitats de la base de données de GeoNature
 HABREF_API_RELEASE=0.1.2
 # Définir dans quelle version du sous-module des nomenclatures (release, branche ou tag) prendre le code SQL permettant la création du schéma 'ref_nomenclatures' de la base de données GeoNature
+# NOMENCLATURE_RELEASE=develop
 NOMENCLATURE_RELEASE=1.3.2
 
 set -e
@@ -16,12 +17,13 @@ set -e
 . install_functions.sh
 . install_db_functions.sh
 
-GN_SCRIPT_PATH=$(get_path_to_script)
-GN_CUR_DIR=$(dirname "$GN_SCRIPT_PATH")
-GN_PARENT_DIR=$(dirname "$GN_CUR_DIR")
-GN_SQL_SCRIPTS_DIR=${SQL_SCRIPTS_DIR:-"$GN_PARENT_DIR/data"}
+# GN_SCRIPT_PATH=$(get_path_to_script)
+GN_CUR_DIR=${PWD##*/}
+# GN_CUR_DIR=$(dirname "$GN_SCRIPT_PATH")
+GN_PARENT_DIR="$(dirname "$(pwd)")"
+GN_SQL_SCRIPTS_DIR=${GN_SQL_SCRIPTS_DIR:-"$GN_PARENT_DIR/data"}
 GN_LOG_DIR=${GN_LOG_DIR:-"$GN_PARENT_DIR/var/log/geonature-db"}
-INSTALL_SCRIPTS_DIR=${INSTALL_SCRIPTS_DIR:-"$GN_CUR_DIR"}
+# INSTALL_SCRIPTS_DIR=${INSTALL_SCRIPTS_DIR:-"$GN_CUR_DIR"}
 
 DB_CONFIG_FILE_PATH="$GN_PARENT_DIR/config/settings.ini" # TODO voir on le laisse ici
 
@@ -52,7 +54,7 @@ then
     export GN_REFGEO_VECTORISE_DEM=$vectorise_dem
     export GN_SAMPLE_DATA=$add_sample_data
 else
-    echo '\n== Please enter the configuration Geonature ==\n'
+    echo "\n== Please enter the geoNature database configuration ==\n"
     read -p 'Database host [default: 127.0.0.1]: ' GN_POSTGRES_HOST
     export GN_POSTGRES_HOST=${GN_POSTGRES_HOST:-'127.0.0.1'}
 
@@ -73,10 +75,10 @@ else
         password=""
         repeat_password=""
         until [[ "$password" != "" ]]; do
-            read -p "Database password: " password
+            read -p -s "Database password: " password
         done
         until [[ "$repeat_password" != "" ]]; do
-            read -p "Repeat database password: " repeat_password
+            read -p -s "Repeat database password: " repeat_password
         done
         if [[ "$password" != "$repeat_password" ]]; then
             echo -e "${START_RED}Passwords don't match. Please try again.${END_RED}"
@@ -97,26 +99,25 @@ else
     
     export GN_ADD_USERSHUB_SAMPLE_DATA=$(prompt_yes_no "Add userhub sample data ? (Recommanded)")
  
-    export GN_REFGEO_MUNICIPALITY=$(prompt_yes_no "Do you want to populate the municipality db table ? (Recommanded)")
+    export GN_REFGEO_MUNICIPALITY=$(prompt_yes_no "Do you want to populate the municipality table with French metropolitan municipalities ? (Recommanded)")
 
-    export GN_REFGEO_GRID=$(prompt_yes_no "Do you want to add the INPM grid layers in DB (grids 1*1, 5*5 and 10*10km)? (Recommanded)")
+    export GN_REFGEO_GRID=$(prompt_yes_no "Do you want to add the INPN grids layer (grids 1*1, 5*5 and 10*10km)? (Recommanded)")
 
     export GN_REFGEO_DEM=$(prompt_yes_no "Do you want install french DEM layer (MNT 250m) ? (Recommanded)")
 
     export GN_REFGEO_VECTORISE_DEM=$(prompt_yes_no "Do you want to vectorize DEM layer ? (Recommanded)")
 
     export GN_SAMPLE_DATA=$(prompt_yes_no "Add GeoNature sample data ? (Recommanded)")
+
+    generate_config
 fi
+#TODO : test
+create_role
 
-prepare_path
-
-if database_exists ${POSTGRES_DB}
+if database_exists ${GN_POSTGRES_DB}
 then
-    echo "Database exists we don't have to drop it. Choise migrate, drop it manualy or change database name."
-fi
-
-if ! database_exists ${POSTGRES_DB}
-then
+    echo "${START_RED}Database exists we don't have to drop it. Choise migrate, drop it manualy or change database name.${END_RED}"
+else
     create_database
 fi
 
