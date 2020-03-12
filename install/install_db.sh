@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# CONSTANTE
-# DO NOT EDIT THIS CONSTANTE UNLESS YOU MAKE A RELEASE
+# CONSTANTS
+# DO NOT EDIT THIS CONSTANTS UNLESS YOU MAKE A RELEASE
 # Définir dans quelle version de UsersHub (release, branche ou tag) prendre le code SQL permettant la création du schéma utilisateurs de la base de données de GeoNature
 USERSHUB_RELEASE=2.1.1
 # Définir dans quelle version de TaxHub (release, branche ou tag) prendre le code SQL permettant la création du schéma taxonomie de la base de données de GeoNature
