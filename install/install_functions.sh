@@ -1,6 +1,7 @@
 
 START_RED="\033[0;31m"
 START_ORANGE="\033[0;33m"
+START_GREEN="\033[0;32m"
 NC="\033[0m"
 
 function get_path_to_script(){

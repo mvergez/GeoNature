@@ -82,14 +82,14 @@ function write_log() {
 }
 
 function create_role() {
-    if $(sudo -u postgres -s psql -p $GN_POSTGRES_PORT -t -c "SELECT count(*) FROM pg_user WHERE usename='$GN_POSTGRES_USER'") = 0 #test l'existence de cet utilisateur avant
+    if [ $(sudo -u postgres -s psql -p $GN_POSTGRES_PORT -t -c "SELECT count(*) FROM pg_user WHERE usename='$GN_POSTGRES_USER';") = 0 ] #test l'existence de cet utilisateur avant
 	then
 		echo ; echo "Création de l'utilisateur PostgreSQL $GN_POSTGRES_USER ..." ; echo 
 		sudo -n -u postgres -s psql -p $GN_POSTGRES_PORT -c "CREATE ROLE $GN_POSTGRES_USER WITH LOGIN PASSWORD '$GN_POSTGRES_PASSWORD';"
 		#restart postgresql if we launch twice the script
 		sudo service postgresql restart
 	else
-		echo ; echo "L'utilisateur PostgreSQL $GN_POSTGRES_USER existe déjà" ; echo
+		echo ; printf "${START_ORANGE}The PostgreSQL user '$GN_POSTGRES_USER' already exists. The password has not been changed.${NC}\n" ; echo
     fi
     return $?
 }

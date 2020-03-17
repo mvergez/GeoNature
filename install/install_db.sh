@@ -125,7 +125,9 @@ then
     then
         #lancement de migrate_db.sh
         . migration/migrate_db_functions.sh
-        apply_missing_migrations
+        apply_migrations
+        # apply_missing_migrations_test
+        # echo $?
         exit 0
     else
         echo "Nothing was doing. Do it yourself !"

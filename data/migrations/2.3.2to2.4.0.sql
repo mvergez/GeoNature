@@ -69,4 +69,5 @@ COMMENT ON COLUMN gn_commons.t_migrations.soft_code IS 'code unique et permanent
 COMMENT ON COLUMN gn_commons.t_migrations.install_date IS 'date à laquelle la version actuelle a été mise à jour';
 ALTER TABLE ONLY gn_commons.t_migrations
     ADD CONSTRAINT pk_t_migrations PRIMARY KEY (id_migration);
-
+ALTER TABLE ONLY gn_commons.t_migrations
+    ADD CONSTRAINT unique_t_migrations_migration_number UNIQUE (migration_number);

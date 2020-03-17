@@ -544,6 +544,8 @@ ALTER TABLE t_modules
 ALTER TABLE t_mobile_apps
     ADD CONSTRAINT unique_t_mobile_apps_app_code UNIQUE (app_code);
 
+ALTER TABLE ONLY t_migrations
+    ADD CONSTRAINT unique_t_migrations_migration_number UNIQUE (migration_number);
 ------------
 --TRIGGERS--
 ------------
