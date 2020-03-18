@@ -141,7 +141,7 @@ clean=$(prompt_yes_no "Do you want to clean temporary files ?")
 if [ "$migr" = true ];
 then
     echo "Cleaning files..."
-    #TODO checker les fichiers à supprimer
+    #TODO adapter la liste des fichiers à supprimer
     rm tmp/geonature/*.sql
     rm tmp/usershub/*.sql
     rm tmp/taxhub/*.txt

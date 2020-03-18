@@ -1,27 +1,50 @@
 #! /bin/bash
 source "$GN_PARENT_DIR/install/install_functions.sh"
 
+# Test if a table exists in database or not
 # param : schema.table
+# return : table name if exists or null if not
 function table_exists() {
     pg_query "SELECT to_regclass('"$1"');"
 }
 
-function get_latest_migration_number() {
+function request_current_database_version_number() {
     pg_query "SELECT max(migration_number) FROM gn_commons.t_migrations WHERE install_date IS NOT NULL;"
 }
 
-function set_database_current_version () {
-    latest_migration_number=$(get_latest_migration_number | xargs)
-    latest_migration_number=${latest_migration_number:-0}
-    export CURRENT_DATABASE_VERSION=$latest_migration_number
+function get_database_current_version () {
+    database_current_version=$(request_current_database_version_number | xargs)
+    database_current_version=${database_current_version:-0}
+    export CURRENT_DATABASE_VERSION=$database_current_version
 }
 
 function get_migration_scripts_to_apply() {
-    set_database_current_version
-    ls "$GN_MIGRATION_SCRIPTS_DIR"/update_to_*.sql -1 | gawk 'match($0, /update_to_([A-Z]{2})_([0-9]+)/, a) {print a[2], $0}' | sort | cut -d" " -f2 | tail -n +$((CURRENT_DATABASE_VERSION+1))
+    get_database_current_version
+    ls "$GN_MIGRATION_SCRIPTS_DIR"/update_to_*.sql -1 | gawk 'match($0, /update_to_([A-Z]{2})_([0-9]+)/, a) {print a[2], $0}' | sort -n | cut -d" " -f2 | tail -n +$((CURRENT_DATABASE_VERSION+1))
+}
+
+function get_target_version_number() {
+    ls /home/gil/geonature2/data/migrations/update_to_*.sql -1 | gawk 'match($0, /update_to_([A-Z]{2})_([0-9]+)/, a) {print a[2], $0}' | sort -n | cut -d" " -f2 | tail -n 1 | cut -d _ -f4 |cut -d . -f1
 }
 
 function apply_migrations() {
+    # First test if database support this script
+    if [ -n $(table_exists gn_commons.t_migration) ];then
+        printf "${START_RED}FATAL : Gloups ! Your database isn't ready to migrate with this script.\n"
+        printf "You have migrate manualy. See the release note.${NC}\n"
+        exit 1
+    fi
+
+    # Compare current and target database versions
+    get_database_current_version
+    target_version=$(get_target_version_number)
+    echo "Current database version : $CURRENT_DATABASE_VERSION"
+    echo "Target database version : $target_version"
+    if (( "$target_version" == "$CURRENT_DATABASE_VERSION" ));then
+        printf "${START_ORANGE}NOTICE : Database is already up to date. Nothing to do.${NC}\n"
+        exit 0
+    fi
+    
     export PGPASSWORD="$GN_POSTGRES_PASSWORD";
     # Prepare SQL file with all update files to apply
     echo "--MIGRATION--" > tmp_migrate.sql
@@ -29,7 +52,6 @@ function apply_migrations() {
     
     # Prepare log file
     echo "------------------" > $GN_LOG_DIR/migrate.log
-    set_database_current_version
     echo "Numéro de version de la base avant migration = $CURRENT_DATABASE_VERSION"  >> $GN_LOG_DIR/migrate.log
     echo "" >> $GN_LOG_DIR/migrate.log
     echo "Numéro de version de la base avant migration = $CURRENT_DATABASE_VERSION" 
@@ -47,7 +69,7 @@ function apply_migrations() {
     if [ $test = 0 ];then
         printf "${START_GREEN}Success ! Database is up to date.${NC}\n"
     else
-        echo "ROLLBACK;"  >> $GN_LOG_DIR/migrate.log
+        echo "ROLLBACK;"  >> $GN_LOG_DIR/migrate.log # fictif pour clarifier les logs. Le rollback est fait par psql si erreur (à vérifier)
         echo "ROLLBACK"
         printf "${START_RED}Houps a error occured (see above).\nFor Detail, have a look to the log file here : '$GN_LOG_DIR/migrate.log'.\nYou have to execute update file(s) manualy and one by one.${NC}\n"
         echo "Nothing has changed."
@@ -56,45 +78,10 @@ function apply_migrations() {
     # Set log after migration
     echo "" >> $GN_LOG_DIR/migrate.log
     echo "------------------" >> $GN_LOG_DIR/migrate.log
-    set_database_current_version
+    get_database_current_version
     echo "Numéro de version de la base après migration = $CURRENT_DATABASE_VERSION"  >> $GN_LOG_DIR/migrate.log
     echo "Numéro de version de la base après migration = $CURRENT_DATABASE_VERSION"
 
     # Cleanning
     rm tmp_migrate.sql
 }
-
-# function apply_missing_migrations_test() {
-#     latest_migration_number=1
-#     # latest_migration_number=$(get_latest_migration_number | xargs)
-#     latest_migration_number=${latest_migration_number:-1}
-#     # echo $latest_migration_number
-#     # sqlfiles=$(ls "$GN_MIGRATION_SCRIPTS_DIR"/update_to_*.sql -1)
-#     # echo $sqlfiles
-#     echo "------------------" > $GN_LOG_DIR/migrate.log
-#     for sqlfile in $(ls "$GN_MIGRATION_SCRIPTS_DIR"/update_to_*.sql -1 | gawk 'match($0, /update_to_([A-Z]{2})_([0-9]+)/, a) {print a[2], $0}' | sort | cut -d" " -f2 | tail -n +$((latest_migration_number+1))); do
-#         globaltest=1
-#         psql -a -e -b -h $GN_POSTGRES_HOST -U $GN_POSTGRES_USER -d $GN_POSTGRES_DB -c "BEGIN;" &>> $GN_LOG_DIR/migrate.log
-#         echo 'BEGIN'
-#         echo 'BEGIN;' &>> $GN_LOG_DIR/migrate.log
-#         psql -a -e -b -h $GN_POSTGRES_HOST -U $GN_POSTGRES_USER -d $GN_POSTGRES_DB -1 -v ON_ERROR_STOP=1 -f $sqlfile |& tee $GN_LOG_DIR/migrate.log | grep 'ERREUR'; test=${PIPESTATUS[0]}
-#         if [ $test -eq 0 ];then
-#             echo "$sqlfile : ok !"
-#             globaltest=0
-#         else
-#             printf "${START_RED}A error occured in '$sqlfile'.\nSee log file : '$GN_LOG_DIR/migrate.log'.\nYou have to execute update file(s) manualy and one by one.${NC}\n"
-#             globaltest=1
-#             break
-#         fi
-#         psql -a -e -b -h $GN_POSTGRES_HOST -U $GN_POSTGRES_USER -d $GN_POSTGRES_DB -c "ROLLBACK;" &>> $GN_LOG_DIR/migrate.log
-#         echo 'ROLLBACK'
-#     done
-#     echo "globaltest : $globaltest"
-#     if [ $globaltest -eq 0 ];then
-#         psql -a -e -b -h $GN_POSTGRES_HOST -U $GN_POSTGRES_USER -d $GN_POSTGRES_DB -c "COMMIT;"  &>> $GN_LOG_DIR/migrate.log
-#         echo "On est bon, on peut lancer l'execution"
-#     else
-#         psql -a -e -b -h $GN_POSTGRES_HOST -U $GN_POSTGRES_USER -d $GN_POSTGRES_DB -c "ROLLBACK;" &>> $GN_LOG_DIR/migrate.log
-#         echo "Pas bon, dit que c'est annulé"
-#     fi
-# }
