@@ -125,13 +125,11 @@ WITH DATA;
 
 --- Fonction calcul de la sensibilité
 
-CREATE OR REPLACE FUNCTION gn_sensitivity.get_id_nomenclature_sensitivity(
-    my_date_obs date,
-    my_cd_ref integer,
-    my_geom geometry,
-    my_criterias jsonb)
-  RETURNS integer AS
-$BODY$
+CREATE OR REPLACE FUNCTION gn_sensitivity.get_id_nomenclature_sensitivity(my_date_obs date, my_cd_ref integer, my_geom geometry, my_criterias jsonb)
+ RETURNS integer
+ LANGUAGE plpgsql
+ IMMUTABLE
+AS $function$
 DECLARE
     niv_precis integer;
     niv_precis_null integer;
@@ -184,13 +182,26 @@ BEGIN
     ) THEN
         -- Si le critère est remplis
         niv_precis := (
-            SELECT DISTINCT id_nomenclature_sensitivity
-            FROM gn_sensitivity.t_sensitivity_rules_cd_ref s
-            JOIN gn_sensitivity.cor_sensitivity_criteria c USING(id_sensitivity)
-            JOIN (SELECT * FROM jsonb_each_text(my_criterias)) a
-            ON c.id_criteria = a.value::int
-            WHERE s.cd_ref = my_cd_ref
-            LIMIT 1
+
+			WITH RECURSIVE h_val(KEY, value, id_broader) AS  (
+				SELECT KEY, value::int, id_broader
+				FROM (SELECT * FROM jsonb_each_text(my_criterias)) d
+				JOIN ref_nomenclatures.t_nomenclatures tn
+				ON tn.id_nomenclature = d.value::int
+				UNION
+				SELECT KEY, id_nomenclature , tn.id_broader
+				FROM ref_nomenclatures.t_nomenclatures tn
+				JOIN h_val
+				ON tn.id_nomenclature = h_val.id_broader
+				WHERE NOT id_nomenclature = 0
+			)
+			SELECT DISTINCT id_nomenclature_sensitivity
+			FROM gn_sensitivity.t_sensitivity_rules_cd_ref s
+			JOIN gn_sensitivity.cor_sensitivity_criteria c USING(id_sensitivity)
+			JOIN h_val a
+			ON c.id_criteria = a.value
+			WHERE s.cd_ref = my_cd_ref
+			LIMIT 1
         );
         IF niv_precis IS NULL THEN
             niv_precis := (SELECT ref_nomenclatures.get_id_nomenclature('SENSIBILITE'::text, '0'::text));
@@ -234,10 +245,30 @@ BEGIN
 	return niv_precis;
 
 END;
-$BODY$
-  LANGUAGE plpgsql IMMUTABLE
-  COST 100;
+$function$
+;
 
+CREATE OR REPLACE FUNCTION gn_sensitivity.calculate_cd_diffusion_level(
+  cd_nomenclature_diffusion_level character varying, cd_nomenclature_sensitivity character varying
+)
+ RETURNS character varying
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  IF cd_nomenclature_diffusion_level IS NULL 
+    THEN RETURN
+    CASE 
+      WHEN cd_nomenclature_sensitivity = '0' THEN '5'
+      WHEN cd_nomenclature_sensitivity = '1' THEN '3'
+      WHEN cd_nomenclature_sensitivity = '2' THEN '2'
+      WHEN cd_nomenclature_sensitivity = '3' THEN '3'
+      WHEN cd_nomenclature_sensitivity = '4' THEN '4'
+    END;
+  ELSE 
+    RETURN cd_nomenclature_diffusion_level;
+  END IF;
+END;
+$function$
 
 
 -- Table permettant de stocker la sensibilité d'une donnée issue de la synthèse
@@ -257,42 +288,53 @@ CREATE TABLE gn_sensitivity.cor_sensitivity_synthese  (
         CHECK (ref_nomenclatures.check_nomenclature_type_by_mnemonique(id_nomenclature_sensitivity, 'SENSIBILITE'::character varying)) NOT VALID
 );
 
+-- Trigger function executed by a ON EACH STATEMENT triger
 CREATE OR REPLACE FUNCTION gn_sensitivity.fct_tri_maj_id_sensitivity_synthese()
   RETURNS trigger AS
 $BODY$
 BEGIN
-    UPDATE gn_synthese.synthese SET id_nomenclature_sensitivity = NEW.id_nomenclature_sensitivity
-    WHERE unique_id_sinp = NEW.uuid_attached_row;
-    RETURN NEW;
+    UPDATE gn_synthese.synthese AS s
+    SET id_nomenclature_sensitivity = updated_rows.id_nomenclature_sensitivity
+    FROM NEW AS updated_rows
+    WHERE s.unique_id_sinp = updated_rows.uuid_attached_row;
+    RETURN NULL;
 END;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
+-- Trigger function executed by a ON EACH STATEMENT triger
 CREATE OR REPLACE FUNCTION gn_sensitivity.fct_tri_delete_id_sensitivity_synthese()
   RETURNS trigger AS
 $BODY$
 BEGIN
-    UPDATE gn_synthese.synthese SET id_nomenclature_sensitivity = gn_synthese.get_default_nomenclature_value('SENSIBILITE'::character varying)
-    WHERE unique_id_sinp = OLD.uuid_attached_row;
-    RETURN OLD;
+    UPDATE gn_synthese.synthese AS s
+    SET id_nomenclature_sensitivity = gn_synthese.get_default_nomenclature_value('SENSIBILITE'::character varying)
+    FROM OLD AS deleted_rows
+    WHERE s.unique_id_sinp = deleted_rows.uuid_attached_row;
+    RETURN NULL;
 END;
 $BODY$
   LANGUAGE plpgsql VOLATILE
   COST 100;
 
 
-CREATE TRIGGER tri_maj_id_sensitivity_synthese
-  AFTER INSERT OR UPDATE
-  ON gn_sensitivity.cor_sensitivity_synthese
-  FOR EACH ROW
+CREATE TRIGGER tri_insert_id_sensitivity_synthese
+  AFTER INSERT ON gn_sensitivity.cor_sensitivity_synthese
+  REFERENCING NEW TABLE AS NEW
+  FOR EACH STATEMENT
   EXECUTE PROCEDURE gn_sensitivity.fct_tri_maj_id_sensitivity_synthese();
 
+CREATE TRIGGER tri_maj_id_sensitivity_synthese
+  AFTER UPDATE ON gn_sensitivity.cor_sensitivity_synthese
+  REFERENCING NEW TABLE AS NEW
+  FOR EACH STATEMENT
+  EXECUTE PROCEDURE gn_sensitivity.fct_tri_maj_id_sensitivity_synthese();
 
 CREATE TRIGGER tri_delete_id_sensitivity_synthese
-  AFTER DELETE
-  ON gn_sensitivity.cor_sensitivity_synthese
-  FOR EACH ROW
+  AFTER DELETE ON gn_sensitivity.cor_sensitivity_synthese
+  REFERENCING OLD TABLE AS OLD
+  FOR EACH STATEMENT
   EXECUTE PROCEDURE gn_sensitivity.fct_tri_delete_id_sensitivity_synthese();
 
 CREATE TRIGGER tri_meta_dates_change_cor_sensitivity_synthese

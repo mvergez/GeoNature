@@ -23,8 +23,12 @@ from geonature.utils.command import (
     frontend_routes_templating,
     tsconfig_templating,
     tsconfig_app_templating,
-    update_app_configuration
+    update_app_configuration,
 )
+
+# from rq import Queue, Connection, Worker
+# import redis
+from flask import Flask
 
 
 log = logging.getLogger()
@@ -85,6 +89,18 @@ def install_command(ctx):
             ).format(DEFAULT_VIRTUALENV_DIR)
         )
 
+# Unused
+# @main.command()
+# def launch_redis_worker():
+#     """ launch redis worker
+#     """
+#     app = get_app_for_cmd(DEFAULT_CONFIG_FILE)
+#     with app.app_context():
+#         with Connection(redis.Redis(host='localhost', port='6379')):
+#             q = Queue()
+#             w = Worker(q)
+#             w.work()
+
 
 @main.command()
 @click.option("--conf-file", required=False, default=DEFAULT_CONFIG_FILE)
@@ -133,9 +149,7 @@ def dev_back(host, port, conf_file):
 
 
 @main.command()
-@click.option(
-    "--action", default="restart", type=click.Choice(["start", "stop", "restart"])
-)
+@click.option("--action", default="restart", type=click.Choice(["start", "stop", "restart"]))
 @click.option("--app_name", default="geonature2")
 def supervisor(action, app_name):
     """
@@ -187,23 +201,9 @@ def generate_frontend_tsconfig_app():
 
 
 @main.command()
-@click.option(
-    '--conf-file',
-    required=False,
-    default=DEFAULT_CONFIG_FILE
-)
-@click.option(
-    '--build',
-    type=bool,
-    required=False,
-    default=True
-)
-@click.option(
-    '--prod',
-    type=bool,
-    required=False,
-    default=True
-)
+@click.option("--conf-file", required=False, default=DEFAULT_CONFIG_FILE)
+@click.option("--build", type=bool, required=False, default=True)
+@click.option("--prod", type=bool, required=False, default=True)
 def update_configuration(conf_file, build, prod):
     """
         Regénère la configuration de l'application

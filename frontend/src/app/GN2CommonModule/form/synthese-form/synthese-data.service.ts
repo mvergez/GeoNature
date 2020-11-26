@@ -44,10 +44,12 @@ export class SyntheseDataService {
     return queryUrl;
   }
 
+  getTaxons() {
+    return this._api.get<any>(`${AppConfig.API_ENDPOINT}/occtax/releves`);
+  }
+
   getSyntheseData(params) {
-    return this._api.post<any>(`${AppConfig.API_ENDPOINT}/synthese/for_web`,
-      params
-    );
+    return this._api.post<any>(`${AppConfig.API_ENDPOINT}/synthese/for_web`, params);
   }
 
   getSyntheseGeneralStat() {
@@ -55,7 +57,7 @@ export class SyntheseDataService {
   }
 
   getOneSyntheseObservation(id_synthese) {
-    return this._api.get<GeoJSON>(`${AppConfig.API_ENDPOINT}/synthese/vsynthese/${id_synthese}`);
+    return this._api.get<any>(`${AppConfig.API_ENDPOINT}/synthese/vsynthese/${id_synthese}`);
   }
 
   // validation data
@@ -101,27 +103,61 @@ export class SyntheseDataService {
         observe: 'events',
         responseType: 'blob',
         reportProgress: true
-      });
+      }
+    );
 
     this.subscribeAndDownload(source, filename, format);
   }
 
-  downloadStatusOrMetadata(url: string, format: string, queryString: HttpParams, filename: string) {
+  downloadStatusOrMetadata(url: string, format: string, postParams: any, filename: string) {
     this.isDownloading = true;
-    const source = this._api.get(`${url}?${queryString.toString()}`, {
+
+    const source = this._api.post(`${url}`, postParams, {
       headers: new HttpHeaders().set('Content-Type', `${FormatMapMime.get(format)}`),
       observe: 'events',
       responseType: 'blob',
       reportProgress: true
     });
-
     this.subscribeAndDownload(source, filename, format);
+  }
+
+  downloadUuidReport(filename: string, args: { [key: string]: string }) {
+    let queryString: HttpParams = new HttpParams();
+    // tslint:disable-next-line:forin
+    for (const key in args) {
+      queryString = queryString.set(key, args[key].toString());
+    }
+    const source = this._api.get(`${AppConfig.API_ENDPOINT}/meta/uuid_report`, {
+      headers: new HttpHeaders().set('Content-Type', 'text/csv'),
+      observe: 'events',
+      responseType: 'blob',
+      reportProgress: true,
+      params: queryString
+    });
+    this.subscribeAndDownload(source, filename, "csv", false);
+  }
+
+  downloadSensiReport(filename: string, args: { [key: string]: string }) {
+    let queryString: HttpParams = new HttpParams();
+    // tslint:disable-next-line:forin
+    for (const key in args) {
+      queryString = queryString.set(key, args[key].toString());
+    }
+    const source = this._api.get(`${AppConfig.API_ENDPOINT}/meta/sensi_report`, {
+      headers: new HttpHeaders().set('Content-Type', 'text/csv'),
+      observe: 'events',
+      responseType: 'blob',
+      reportProgress: true,
+      params: queryString
+    });
+    this.subscribeAndDownload(source, filename, "csv", false);
   }
 
   subscribeAndDownload(
     source: Observable<HttpEvent<Blob>>,
     fileName: string,
-    format: string
+    format: string,
+    addDateToFilename: boolean = true
   ): void {
     const subscription = source.subscribe(
       event => {
@@ -138,7 +174,9 @@ export class SyntheseDataService {
         this.isDownloading = false;
         const date = new Date();
         const extension = format === 'shapefile' ? 'zip' : format;
-        this.saveBlob(this._blob, `${fileName}_${date.toISOString()}.${extension}`);
+        this.saveBlob(this._blob,
+          `${fileName}${addDateToFilename ? '_' + date.toISOString() : ''}.${extension}`
+        );
         subscription.unsubscribe();
       }
     );
