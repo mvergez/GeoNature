@@ -1,5 +1,5 @@
 
-SET search_path = utilisateurs, pg_catalog;
+SET search_path = utilisateurs, pg_catalog, public;
 
 -- Insérer les applications de base liées à GeoNature
 INSERT INTO t_applications (code_application, nom_application, desc_application, id_parent) VALUES 

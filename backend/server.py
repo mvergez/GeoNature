@@ -9,14 +9,19 @@ from flask_mail import Mail, Message
 from flask_cors import CORS
 from sqlalchemy import exc as sa_exc
 from flask_sqlalchemy import before_models_committed
+from flask_migrate import Migrate
 
+from geonature.utils.env import load_config, get_config_file_path
 from geonature.utils.env import DB, MA, list_and_import_gn_modules
 
 
 MAIL = Mail()
+migrate = Migrate()
 
 
-def get_app(config, _app=None, with_external_mods=True, with_flask_admin=True):
+def get_app(config=None, _app=None, with_external_mods=True, with_flask_admin=True):
+    if config is None:
+        config = load_config(get_config_file_path())
     # Make sure app is a singleton
     if _app is not None:
         return _app
@@ -26,6 +31,7 @@ def get_app(config, _app=None, with_external_mods=True, with_flask_admin=True):
 
     # Bind app to DB
     DB.init_app(app)
+    migrate.init_app(app, DB, directory='geonature/migrations')
 
     # For deleting files on "delete" media
     @before_models_committed.connect_via(app)

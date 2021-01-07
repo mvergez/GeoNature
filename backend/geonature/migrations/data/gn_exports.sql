@@ -9,7 +9,7 @@ SET client_min_messages = warning;
 CREATE SCHEMA IF NOT EXISTS gn_exports;
 
 
-SET search_path = gn_exports, pg_catalog;
+SET search_path = gn_exports, pg_catalog, public;
 
 
 CREATE TABLE t_config_exports (

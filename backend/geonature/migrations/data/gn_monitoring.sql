@@ -8,7 +8,7 @@ SET client_min_messages = warning;
 --DROP SCHEMA suivi CASCADE;
 CREATE SCHEMA gn_monitoring;
 
-SET search_path = gn_monitoring, pg_catalog;
+SET search_path = gn_monitoring, pg_catalog, public;
 SET default_with_oids = false;
 
 ---------
