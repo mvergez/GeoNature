@@ -1,3 +1,6 @@
+-- Création du schéma "gn_synthese" en version 2.7.5
+-- A partir de la version 2.8.0, les évolutions de la BDD sont gérées dans des migrations Alembic
+
 SET statement_timeout = 0;
 SET lock_timeout = 0;
 SET client_encoding = 'UTF8';
@@ -142,7 +145,7 @@ CREATE TABLE synthese (
     place_name character varying(500),
     the_geom_4326 public.geometry(Geometry,4326),
     the_geom_point public.geometry(Point,4326),
-    the_geom_local public.geometry(Geometry,MYLOCALSRID),
+    the_geom_local public.geometry(Geometry,:local_srid),
     precision integer,
     id_area_attachment integer,
     date_min timestamp without time zone NOT NULL,
@@ -165,7 +168,7 @@ CREATE TABLE synthese (
     CONSTRAINT enforce_dims_the_geom_point CHECK ((public.st_ndims(the_geom_point) = 2)),
     CONSTRAINT enforce_geotype_the_geom_point CHECK (((public.geometrytype(the_geom_point) = 'POINT'::text) OR (the_geom_point IS NULL))),
     CONSTRAINT enforce_srid_the_geom_4326 CHECK ((public.st_srid(the_geom_4326) = 4326)),
-    CONSTRAINT enforce_srid_the_geom_local CHECK ((public.st_srid(the_geom_local) = MYLOCALSRID)),
+    CONSTRAINT enforce_srid_the_geom_local CHECK ((public.st_srid(the_geom_local) = :local_srid)),
     CONSTRAINT enforce_srid_the_geom_point CHECK ((public.st_srid(the_geom_point) = 4326))
 );
 COMMENT ON TABLE synthese IS 'Table de synthèse destinée à recevoir les données de tous les protocoles. Pour consultation uniquement';
@@ -433,7 +436,7 @@ s as (
 ,loc AS (
   SELECT cd_ref,
 	count(*) AS nbobs,
-	public.ST_Transform(public.ST_SetSRID(public.box2d(public.ST_extent(s.the_geom_local))::geometry,MYLOCALSRID), 4326) AS bbox4326
+	public.ST_Transform(public.ST_SetSRID(public.box2d(public.ST_extent(s.the_geom_local))::geometry,:local_srid), 4326) AS bbox4326
   FROM  s
   GROUP BY cd_ref
 )
@@ -1023,25 +1026,25 @@ CREATE TRIGGER trg_maj_synthese_observers_txt
   EXECUTE PROCEDURE gn_synthese.fct_tri_maj_observers_txt();
 
 
- CREATE TRIGGER tri_insert_cor_area_synthese
+CREATE TRIGGER tri_insert_cor_area_synthese
   AFTER insert ON gn_synthese.synthese
   REFERENCING NEW TABLE AS NEW
   FOR EACH STATEMENT
   EXECUTE PROCEDURE gn_synthese.fct_trig_insert_in_cor_area_synthese_on_each_statement();
 
- CREATE TRIGGER tri_update_cor_area_synthese
+CREATE TRIGGER tri_update_cor_area_synthese
   AFTER UPDATE OF the_geom_local, the_geom_4326 ON gn_synthese.synthese
   FOR EACH ROW
   EXECUTE PROCEDURE gn_synthese.fct_trig_update_in_cor_area_synthese();
 
 CREATE TRIGGER tri_insert_calculate_sensitivity
- AFTER INSERT ON gn_synthese.synthese
+  AFTER INSERT ON gn_synthese.synthese
   REFERENCING NEW TABLE AS NEW
   FOR EACH STATEMENT
   EXECUTE PROCEDURE gn_synthese.fct_tri_cal_sensi_diff_level_on_each_statement();
   
 CREATE TRIGGER tri_update_calculate_sensitivity
- AFTER UPDATE OF date_min, date_max, cd_nom, the_geom_local, id_nomenclature_bio_status ON gn_synthese.synthese
+  AFTER UPDATE OF date_min, date_max, cd_nom, the_geom_local, id_nomenclature_bio_status ON gn_synthese.synthese
   FOR EACH ROW
   EXECUTE PROCEDURE gn_synthese.fct_tri_cal_sensi_diff_level_on_each_row();
 

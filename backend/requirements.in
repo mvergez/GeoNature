@@ -7,11 +7,12 @@ flask-migrate
 flask_wtf
 marshmallow-sqlalchemy
 WTForms-SQLAlchemy
-marshmallow<3.0
+marshmallow
 pillow
-weasyprint
+weasyprint<53
 lxml
 xmltodict
+sqlalchemy<1.4
 
 utils-flask-sqlalchemy
 utils-flask-sqlalchemy-geo
