@@ -18,20 +18,29 @@
         <div class="card-body">
 
           <div>
-            <small>Cadre d'acquisition </small>
-            <select
-              class="form-control form-control-sm"
+            <small>Cadre d'acquisition</small>
+            <ng-select
               [formControl]="form.get('id_acquisition_framework')"
+              [items]="acquisitionFrameworks |async"
+              bindLabel="acquisition_framework_name"
+              bindValue="id_acquisition_framework"
+              [disabled]="true"
             >
-              <option
-                *ngFor="let af of (acquisitionFrameworks | async)"
-                [disabled]="!af.opened"
-                [title]="!af.opened ? 'Cadre cloturé' : af.acquisition_framework_name"
-                [ngValue]="af.id_acquisition_framework"
-              >
-                {{af.acquisition_framework_name}}
-              </option>
-            </select>
+            <ng-template 
+              ng-option-tmp 
+              let-item="item" 
+              let-index="index" 
+              let-search="searchTerm"
+            >
+              <span class="pre-wrap"> 
+                <span *ngIf="!item.opened">
+                  [Cloturé]
+                </span>
+                 {{item.acquisition_framework_name}}
+              </span>
+            </ng-template>
+            
+          </ng-select>
           </div>
 
           <div>
@@ -150,6 +159,7 @@
               [parentFormControl]="form.get('cor_territories')"
               codeNomenclatureType="TERRITOIRE"
               [bindAllItem]="true"
+              [keyValue]="null"
             >
             </pnx-nomenclature>
           </div>
@@ -212,7 +222,7 @@
               [values]="moduleService.modules"
               [parentFormControl]="form.get('modules')"
               keyLabel="module_label"
-              keyValue="id_module"
+              [keyValue]="null"
               label="Module(s) GeoNature associé(s) au jeu de données"
               [bindAllItem]="true"
             >
@@ -245,12 +255,25 @@
             <pnx-metadata-actor
               *ngIf="datasetFormS.isMainContact(actorForm)"
               [actorForm]="actorForm"
-              [isRemovable]="idx != 0"
+              [isRemovable]="datasetFormS.actors.controls.length > 1"
               metadataType="dataset"
               (actorFormRemove)="datasetFormS.removeActor(datasetFormS.actors, idx)"
               [defaultTab]="(datasetFormS.dataset | async)?.id_dataset ? 'all': 'organism'"
             >
             </pnx-metadata-actor>
+
+            <ng-container *ngIf="
+              !datasetFormS.actors.valid
+              && datasetFormS.actors.errors?.hasDoublons.index == idx
+            ">
+              <small
+                  class="mat-error">
+                  Ce contact principal est déjà présent dans la liste
+                </small>
+            </ng-container>
+            
+            <p></p>
+        
           </ng-container>
 
               <button
@@ -260,9 +283,11 @@
                 color="primary"
                 matTooltip="Ajouter un autre contact principal"
                 (click)="addMainContact()"
+                [disabled]="!(datasetFormS.genericActorForm.valid && datasetFormS.actors.valid)"
               >
                 <mat-icon>add</mat-icon>
               </button>
+              
         </div>
       </div>
 
@@ -279,6 +304,19 @@
             [defaultTab]="(datasetFormS.dataset | async)?.id_dataset ? 'all': 'organism'"
             >
             </pnx-metadata-actor>
+            <ng-container *ngIf="
+              !datasetFormS.genericActorForm.valid
+              && datasetFormS.genericActorForm.errors?.hasDoublons.index == idx
+            ">
+            <small
+              class="mat-error">
+              Cet acteur est déjà présent dans la liste
+              
+            </small>
+          </ng-container>
+          
+          <p></p>
+
           </ng-container>
           <button
             class="mt-2 float-right"
@@ -287,11 +325,13 @@
             color="primary"
             matTooltip="Ajouter un autre acteur"
             (click)="addGenericContact()"
+            [disabled]="!(datasetFormS.genericActorForm.valid && datasetFormS.actors.valid)"
           >
             <mat-icon>add</mat-icon>
           </button>
 
         </div>
+
       </div>
     </div>
   </div>

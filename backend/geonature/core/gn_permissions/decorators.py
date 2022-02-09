@@ -5,7 +5,7 @@ import json
 from functools import wraps
 
 from flask import redirect, request, Response, current_app, g, Response
-from werkzeug.exceptions import Forbidden
+from werkzeug.exceptions import Unauthorized, Forbidden
 
 from geonature.core.gn_permissions.tools import (
     get_user_permissions,
@@ -14,13 +14,23 @@ from geonature.core.gn_permissions.tools import (
 )
 
 
+def login_required(view_func):
+    @wraps(view_func)
+    def decorated_view(*args, **kwargs):
+        if g.current_user is None:
+            raise Unauthorized
+        return view_func(*args, **kwargs)
+    return decorated_view
+
+
 def check_cruved_scope(
     action,
     get_role=False,
     module_code=None,
     object_code=None,
     redirect_on_expiration=None,
-    redirect_on_invalid_token=None
+    redirect_on_invalid_token=None,
+    get_scope=False,
 ):
     """
     Decorator to protect routes with SCOPE CRUVED
@@ -56,16 +66,18 @@ def check_cruved_scope(
             if user_with_highter_perm:
                 user_with_highter_perm = user_with_highter_perm[0]
 
-            # if get_role = True : set info_role as kwargs
-            if get_role:
-                kwargs["info_role"] = user_with_highter_perm
             # if no perm or perm = 0 -> raise 403
             if user_with_highter_perm is None or user_with_highter_perm.value_filter == "0":
                 if object_code:
-                    message = f"""User {user["id_role"]} cannot "{action}" {object_code}"""
+                    message = f"""User {user["id_role"]} cannot "{action}" in {module_code} on {object_code}"""
                 else:
-                    message = f"""User {user["id_role"]}" cannot "{action}" in {module_code}"""
+                    message = f"""User {user["id_role"]} cannot "{action}" in {module_code}"""
                 raise Forbidden(description=message)
+            # if get_role = True : set info_role as kwargs
+            if get_role:
+                kwargs["info_role"] = user_with_highter_perm
+            if get_scope:
+                kwargs["scope"] = int(user_with_highter_perm.value_filter)
             g.user = user_with_highter_perm
             return fn(*args, **kwargs)
 

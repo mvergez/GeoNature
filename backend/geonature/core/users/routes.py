@@ -9,7 +9,6 @@ from sqlalchemy.sql import distinct, and_
 from geonature.utils.env import DB
 from geonature.core.gn_permissions import decorators as permissions
 from geonature.core.gn_meta.models import CorDatasetActor, TDatasets
-from geonature.core.gn_meta.repositories import get_datasets_cruved
 from geonature.core.users.models import (
     VUserslistForallMenu,
     CorRole,
@@ -118,89 +117,6 @@ def get_role(id_role):
     return user.as_dict()
 
 
-@routes.route("/role", methods=["POST"])
-@json_resp
-def insert_role(user=None):
-    """
-        Insert un role
-
-        .. :quickref: User;
-
-        @TODO : Ne devrait pas être là mais dans UserHub
-        Utilisé dans l'authentification du CAS INPN
-    """
-    if user:
-        data = user
-    else:
-        data = dict(request.get_json())
-    user = User(**data)
-    if user.id_role is not None:
-        exist_user = DB.session.query(User).get(user.id_role)
-        if exist_user:
-            DB.session.merge(user)
-        else:
-            DB.session.add(user)
-    else:
-        DB.session.add(user)
-    DB.session.commit()
-    DB.session.flush()
-    return user.as_dict()
-
-
-@routes.route("/cor_role", methods=["POST"])
-@json_resp
-def insert_in_cor_role(id_group=None, id_user=None):
-    """
-    Insert a user in a group
-
-    .. :quickref: User;
-
-    :param id_role: the id user
-    :type id_role: int
-    :param id_group: the id group
-    :type id_group: int
-        # TODO ajouter test sur les POST de données
-    """
-    exist_user = (
-        DB.session.query(CorRole)
-        .filter(CorRole.id_role_groupe == id_group)
-        .filter(CorRole.id_role_utilisateur == id_user)
-        .all()
-    )
-    if not exist_user:
-        cor_role = CorRole(id_group, id_user)
-        DB.session.add(cor_role)
-        DB.session.commit()
-        DB.session.flush()
-        return cor_role.as_dict()
-    return {"message": "cor already exists"}, 500
-
-
-@routes.route("/organism", methods=["POST"])
-@json_resp
-def insert_organism(organism):
-    """
-    Insert a organism
-
-    .. :quickref: User;
-    """
-    if organism is not None:
-        data = organism
-    else:
-        data = dict(request.get_json())
-    organism = BibOrganismes(**data)
-    if organism.id_organisme:
-        exist_org = DB.session.query(BibOrganismes).get(organism.id_organisme)
-        if exist_org:
-            DB.session.merge(organism)
-        else:
-            DB.session.add(organism)
-    else:
-        DB.session.add(organism)
-    DB.session.commit()
-    DB.session.flush()
-    return organism.as_dict()
-
 
 @routes.route("/roles", methods=["GET"])
 @json_resp
@@ -254,7 +170,7 @@ def get_organismes_jdd(info_role):
     """
     params = request.args.to_dict()
 
-    datasets = [dataset["id_dataset"] for dataset in get_datasets_cruved(info_role)]
+    datasets = [d.id_dataset for d in TDatasets.query.filter_by_readable()]
     q = (
         DB.session.query(BibOrganismes)
         .join(CorDatasetActor, BibOrganismes.id_organisme == CorDatasetActor.id_organism)
@@ -336,7 +252,7 @@ def confirmation():
     if token is None:
         return {"message": "Token introuvable"}, 404
 
-    data = {"token": token, "id_application": config["ID_APPLICATION_GEONATURE"]}
+    data = {"token": token, "id_application": current_app.config["ID_APPLICATION_GEONATURE"]}
 
     r = s.post(
         url=config["API_ENDPOINT"] + "/pypn/register/post_usershub/valid_temp_user", json=data,

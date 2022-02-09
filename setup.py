@@ -29,7 +29,18 @@ setuptools.setup(
     },
     install_requires=list(open('backend/requirements.in', 'r')),
     extras_require={
-        'tests': ['pytest', 'pytest-flask'],
+        'tests': [
+            'pytest',
+            'pytest-flask',
+            'pytest-cov',
+            'jsonschema',
+        ],
+        'doc': [
+            'sphinx',
+            'sphinx_rtd_theme',
+            'sphinxcontrib-httpdomain',
+            'sphinxcontrib-websupport',
+        ],
     },
     classifiers=[
         "Framework :: Flask",

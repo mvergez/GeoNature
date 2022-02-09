@@ -161,7 +161,8 @@ export class DataFormService {
   }
 
   getTaxaBibList() {
-    return this._http.get<any>(`${AppConfig.API_TAXHUB}/biblistes`).map(d => d.data);
+    return Observable.of([])
+    return this._http.get<any>(`${AppConfig.API_TAXHUB}/biblistes/`).map(d => d.data);
   }
 
   async getTaxonInfoSynchrone(cd_nom: number): Promise<any> {
@@ -311,11 +312,11 @@ export class DataFormService {
     return this._http.get<any>(`${AppConfig.API_ENDPOINT}/geo/municipalities`, { params: params });
   }
 
-  getAreas(area_type_list: Array<number>, area_name?) {
+  getAreas(area_type_list: Array<string>, area_name?) {
     let params: HttpParams = new HttpParams();
 
     area_type_list.forEach(id_type => {
-      params = params.append('id_type', id_type.toString());
+      params = params.append('type_code', id_type.toString());
     });
 
     if (area_name) {
@@ -331,6 +332,7 @@ export class DataFormService {
       {}
     );
   }
+
 
   /**
    *
@@ -348,7 +350,7 @@ export class DataFormService {
     );
   }
 
-  getAcquisitionFrameworksForSelect(searchTerms = {}) {    
+  getAcquisitionFrameworksList(searchTerms = {}) {
     let queryString: HttpParams = new HttpParams();
     for (let key in searchTerms) {
       queryString = queryString.set(key, searchTerms[key])
@@ -570,13 +572,13 @@ export class DataFormService {
   }
   //Ajouter lieu
   addPlace(place) {
-    return this._http.post<any>(`${AppConfig.API_ENDPOINT}/gn_commons/place`, place);
+    return this._http.post<any>(`${AppConfig.API_ENDPOINT}/gn_commons/places`, place);
   }
-
   // Supprimer lieu
   deletePlace(idPlace) {
-    return this._http.delete<any>(`${AppConfig.API_ENDPOINT}/gn_commons/place/${idPlace}`);
+    return this._http.delete<any>(`${AppConfig.API_ENDPOINT}/gn_commons/places/${idPlace}`);
   }
+
   deleteAf(af_id) {
     return this._http.delete<any>(`${AppConfig.API_ENDPOINT}/meta/acquisition_framework/${af_id}`);
   }
@@ -610,6 +612,7 @@ export class DataFormService {
           "type_widget": data.type_widget.widget_name,
           "multi_select": null,
           "values": data.field_values,
+          "value": data.default_value,
           "id_list": data.id_list,
           "objects": data.objects,
           "modules": data.modules,
@@ -621,6 +624,32 @@ export class DataFormService {
         
      });
 
+  }
+
+  getProfile(cdRef) {
+    return this._http.get<any>(`${AppConfig.API_ENDPOINT}/gn_profiles/valid_profile/${cdRef}`)
+  }
+
+  getPhenology(cdRef, idNomenclatureLifeStage?) {
+    return this._http.get<any>(
+      `${AppConfig.API_ENDPOINT}/gn_profiles/cor_taxon_phenology/
+      ${cdRef}?id_nomenclature_life_stage=
+      ${idNomenclatureLifeStage}`
+    )
+  }
+
+  /* A partir d'un id synthese, retourne si l'observation match avec les différents
+   critère d'un profil
+  */
+  getProfileConsistancyData(idSynthese) {
+    return this._http.get<any>(`${AppConfig.API_ENDPOINT}/gn_profiles/consistancy_data/${idSynthese}`)
+  }
+
+  controlProfile(data) {
+    return this._http.post<any>(
+      `${AppConfig.API_ENDPOINT}/gn_profiles/check_observation`,
+      data
+    );
   }
 
 }

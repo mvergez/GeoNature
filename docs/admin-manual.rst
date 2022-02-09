@@ -273,36 +273,52 @@ Note : pour plusieurs fichiers de révisions, notamment lié au référentiel g�
 Gestion des droits
 """"""""""""""""""
 
+Accès à GeoNature et CRUVED
+```````````````````````````
+
 Les comptes des utilisateurs, leur mot de passe, email, groupes et leur accès à l'application GeoNature est géré de manière centralisée dans UsersHub. Pour qu'un rôle (utilisateur ou groupe) ait accès à GeoNature, il faut lui attribuer un profil de "Lecteur" dans l'application GeoNature, grâce à l'application UsersHub.
 
-La gestion des droits (permissions) des rôles, spécifique à GeoNature, est ensuite gérée dans un schéma (``gn_permissions``) et un module de GeoNature dédié. Les permissions des groupes et utilisateurs peuvent en effet être administrées dans le module "Admin / Administration des permissions" de GeoNature.
+La gestion des droits (permissions) des rôles, spécifique à GeoNature, est ensuite gérée dans un schéma (``gn_permissions``) et un module de GeoNature dédié. 
+
+Les permissions des groupes et utilisateurs peuvent en effet être administrées dans le module "Admin / Administration des permissions" de GeoNature.
 Dans la version 1 de GeoNature, il était possible d'attribuer des droits selon 6 niveaux à des rôles (utilisateurs ou groupes). Pour la version 2 de GeoNature, des évolutions ont été réalisées pour étendre les possibilités d'attribution de droits et les rendre plus génériques.
 
 La gestion des droits dans GeoNature, comme dans beaucoup d'applications, est liée à des actions (Create / Read / Update / Delete aka CRUD). Pour les besoins  métiers de l'application nous avons rajouté deux actions : "Valider" et "Exporter", ce qui donne le CRUVED : Create / Read / Update / Validate / Export / Delete.
 
-Sur ces actions, on va pouvoir appliquer des filtres de manière générique.
+Sur ces actions, on peut appliquer des "portées":
 
-Le filtre le plus courant est celui de la "portée". On autorise des actions à un utilisateur sur une portée : "Ses données", "Les données de son organisme", "Toutes les données".
+- Portée 1 = "Mes données". Cela concerne les données sur lesquels je suis :
+   - observateur 
+   - personne ayant effectuée la saisie de la données
+   - personnelement acteur du jeu de données de la donnée
+   - personne ayant saisi le JDD de la donnée
+- Portée 2 = Les données de mon organisme. Portée 1 + :
+   - les données sur lesquels mon organisme est acteur du JDD de la donnée
+- Portée 3 = Toute les données
+   - Toute les données : aucun filtre n'est appliqué
+
 
 Exemple :
 
 - Utilisateur 1 peut effectuer l'action "DELETE" sur la portée "SES DONNEES"
 - Utilisateur Admin peut effectuer l'action "UPDATE" sur la portée "TOUTES LES DONNEES"
 
-Les autres filtres possibles sont liés à la précisions des données, les groupes taxonomiques ou des entités géographiques :
-
-Exemple :
-
-- Utilisateur 1 peut effectuer l'action "READ" sur "LES DONNES DEGRADEES"
-- Utilisateur admin peut effectuer l'action "READ" sur "LES DONNES PRECISES"
-
 Enfin ces permissions vont pouvoir s'attribuer à l'ensemble de l'application GeoNature et/ou à un module.
 
-On a donc le quatriptique : Un utilisateur / Une action / Un filtre / Un module
+On a donc le quatriptique : Un utilisateur / Une action / Une portée / Un module
 
-Pour l'instant les filtres de type groupe taxonomique, précisions et géographique existent dans la base de données mais ne sont pas implémentés au niveau de l'application GeoNature, donc ils n'ont aucun effet.
+**NB** : certains objets comme les JDD et CA sont transversal à tout GeoNature (ils sont utilisés dans tous les modules: saisie, synthese, métadonnées, dashbord), il sont donc contrôlé par les permissions du "module" GeoNature
 
-Récapitulatif :
+Cas particulier de l'action "C"
+```````````````````````````````
+
+| Dans les modules de saisie, on veut que des utilisateurs puissent saisir uniquement dans certains JDD.
+| La liste des JDD ouvert à la saisie est contrôlée par l'action "CREATE" du module dans lequel on se trouve. 
+| Comme il n'est pas "normal" de pouvoir saisir dans des JDD sur lesquels on n'a pas les droit de lecture, la portée de l'action "CREATE" vient simplement réduire la liste des JDD surlesquels on a les droits de lecture ("READ").
+| Même si la portée de l'action "CREATE" sur le module est supérieure à l'action "READ", l'utilisateur ne vera que les JDD surlesquels il a des droits de lecture
+
+Récapitulatif
+`````````````
 
 - Dans GeoNature V2 on peut attribuer à un role des actions possibles, sur lesquels on peut ajouter des filtres, dans un module ou sur toute l'application GeoNature (définis dans ``gn_permissions.cor_role_action_filter_module_object``).
 - 6 actions sont possibles dans GeoNature : Create / Read / Update / Validate / Export / Delete (aka CRUVED).
@@ -353,6 +369,7 @@ Etapes :
 
   $ source backend/venv/bin/activate
   $ geonature update_configuration
+  $ sudo systemctl restart geonature
 
 A ce moment-là, cet utilisateur a tous les droits sur GeoNature.
 Il s'agit maintenant de gérer ses permissions dans GeoNature même. 
@@ -397,6 +414,139 @@ Données SIG
 - La fonction ``ref_geo.fct_get_area_intersection`` permet de renvoyer les zonages intersectés par une observation en fournissant sa géométrie
 - La fonction ``ref_geo.fct_get_altitude_intersection`` permet de renvoyer l'altitude min et max d'une observation en fournissant sa géométrie
 - Les intersections d'une observation avec les zonages sont stockées au niveau de la synthèse (``gn_synthese.cor_area_synthese``) et non au niveau de la donnée source pour alléger et simplifier leur gestion
+
+
+Profils de taxons
+"""""""""""""""""
+
+Introduction
+````````````
+
+GeoNature dispose d'un mécanisme permettant de calculer des profils pour chaque taxon en se basant sur les données validées présentes dans la Synthèse de l'instance.
+
+Ces profils sont stockés dans un schéma dédié ``gn_profiles``, et plus précisément dans les deux vues matérialisées suivantes :
+
+1. La vue matérialisée ``gn_profiles.vm_valid_profiles`` comporte des informations générales sur chaque taxon :
+
+- L'aire d'occurrences
+- Les altitudes extrêmes d'observation du taxon
+- Les dates de première et de dernière observation
+- Le nombre de données valides pour le taxon considéré
+
+2. La vue matérialisée ``gn_profiles.vm_cor_taxon_phenology`` comporte les "combinaisons" d'informations relatives à la phénologie des taxons (voir détail des calculs ci-dessous) :
+
+- La période d'observation
+- Le stade de vie (activable ou non)
+- Les altitudes min et max
+- Les altitudes "fiables" en écartant les valeurs extrêmes
+- Le nombre de données correspondant à cette "combinaison phénologique"
+
+La fonction ``gn_profiles.refresh_profiles()`` permet de rafraichir ces vues matérialisées.
+
+Pour lancer manuellement cette fonction, ouvrez une console SQL et exécutez la requête ``SELECT gn_profiles.refresh_profiles();``.
+
+Cette fonction est aussi diponible en tant que fonction GeoNature qu'il est préférable d'utiliser : ``geonature profiles update``
+
+Pour automatiser l'éxecution de cette fonction (tous les jours à minuit dans cet exemple), :ref:`créer une tâche planfiée<cron>`.
+
+Usage
+`````
+
+Pour chaque taxon (cd_ref) disposant de données dans la vue ``gn_profiles.v_synthese_for_profiles`` (vue filtrée basée sur la synthèse de l'instance), un profil est généré. Il comporte l'aire d'occurrence, les limites altitudinales et les combinaisons phénologiques jugées cohérentes sur la base des données disponibles.
+
+Ces profils sont déclinés sur :
+
+- Le module de validation permet d'attirer l'attention des validateurs sur les données qui sortent du "cadre" déjà connu pour le taxon considéré, et d'apporter des éléments de contexte en complément de la donnée en cours de validation
+- Le module Synthèse (fiche d'information, onglet validation) permet d'apporter des éléments de contexte en complément des données brutes consultées
+- Le module Occtax permet d'alerter les utilisateurs lors de la saisie de données qui sortent du "cadre" déjà connu pour un taxon considéré
+
+.. image :: https://raw.githubusercontent.com/PnX-SI/GeoNature/develop/docs/images/validation.png
+.. image :: https://raw.githubusercontent.com/PnX-SI/GeoNature/develop/docs/images/contexte_donnee.png
+
+Plusieurs fonctions permettent de vérifier si une donnée de la synthèse est cohérente au regard du profil du taxon en question :
+
+- ``gn_profiles.check_profile_distribution`` : permet de vérifier si la donnée testée est totalement incluse dans l'aire d'occurrences déjà connue pour son taxon.
+- ``gn_profiles.check_profile_phenology`` : permet de vérifier si la phénologie d'une donnée (période, stade de vie, altitudes) est une combinaison déjà connue dans le profil du taxon
+- ``gn_profiles.check_profile_altitudes`` : permet de vérifier si une donnée est bien située dans la fourchette d'altitudes connue pour le taxon en question
+
+
+Configuration et paramétrage
+````````````````````````````
+
+*Paramètres de calcul des profils* :
+
+Le calcul des profils de taxons repose sur plusieurs variables, paramétrables soit pour tout le mécanisme, soit pour des taxons donnés.
+
+Les paramètres généraux dans la table ``gn_profiles.t_parameters`` :
+
+- Le paramètre ``id_valid_status_for_profiles`` : permet de lister les ``id_nomenclatures`` des statuts de validation à prendre en compte pour les calculs des profils. Par exemple, en ne listant que les identifiants des nomenclatures "Certain -très probable" et "Probable", seules ces données valides seront prises en compte lors du calcul des profils (comportement par défaut). En listant tous les identifiants des nomenclatures des statuts de validation, l'ensemble des données alimenteront les profils de taxons.
+- Le paramètre ``id_rang_for_profiles`` : permet de lister les ``id_rang`` de Taxref à prendre en compte pour les calculs des profils. Par défaut, les profils ne sont calculés que pour les cd_ref correspondant à des Genres, Espèces et Sous-espèces.
+- Le paramètre ``proportion_kept_data`` définit le pourcentage de données à conserver lors du calcul des altitudes valides (``gn_profiles.vm_cor_taxon_phenology``), en retirant ainsi les extrêmes. Ce paramètre, définit à 95% par défaut, doit être compris entre 51 et 100% (voir détails ci-après).
+
+Les deux premiers paramètres permettent de filtrer les données dans la vue ``gn_profiles.v_synthese_for_profiles``. Cette vue comporte les données de la synthèse qui répondent aux paramètres et qui alimenteront les profils de taxons. Les clauses WHERE de cette vue peuvent être adaptées pour filtrer les données sur davantage de critères et répondre aux besoins plus spécifiques, mais sa structure doit rester inchangée.
+
+Les paramètres définis par taxon le sont dans la table ``gn_profiles.cor_taxons_profiles_parameters`` :
+
+Les profils peuvent être calculés avec des règles différentes en fonction des taxons. Ceux-ci sont définis au niveau du cd_nom, à n'importe quel rang (espèce, famille, règne etc). Ils seront appliqués de manière récursive à tous les taxons situés "sous" le cd_ref paramétré.
+
+Dans le cas où un taxon hérite de plusieurs règles (une définie pour son ordre et une autre définie pour sa famille par exemple), les paramètres définis au plus proche du taxon considéré seront pris en compte.
+
+Par exemple, s'il existe des paramètres pour le phylum "Animalia" (cd_nom 183716) et d'autres pour le renard (cd_nom 60585), les paramètres du renard seront appliqués en priorité pour cette espèce, mais les paramètres Animalia s'appliqueront à tous les autres animaux.
+
+Les règles appliquables à chaque taxon sont récupérées par la fonction ``gn_profiles.get_profiles_parameters(cdnom)``.
+
+Pour chaque cd_nom, il est ainsi possible de définir les paramètres suivants :
+
+- ``spatial_precision`` : La précision spatiale utilisée pour calculer les profils. Elle est exprimée selon l'unité de mesure de la projection locale de l'instance GeoNature : mètres pour le Lambert93, degré pour le WGS84 etc. Elle définit à la fois la taille de la zone tampon appliquée autour de chaque observation pour définir l'aire d'occurrences du taxon, ainsi que la distance maximale admise entre le centroïde et les limites d'une observation pour qu'elle soit prise en compte lors du calcul des profils (évite qu'une donnée imprécise valide à elle seule une grande zone).
+- ``temporal_precision_days`` : La précision temporelle en jours utilisée pour calculer les profils. Elle définit à la fois le pas de temps avec lequel la phénologie est calculée, ainsi que la précision temporelle minimale requise (différence entre date début et date fin de l'observation) pour qu'une donnée soit prise en compte dans le calcul des profils. Une précision de 365 jours ou plus permettra de ne pas tenir compte de la période (toutes les données seront dans une unique période de l'année).
+- ``active_life_stage`` : Définit si le stade de vie doit être pris en compte ou non lors du calcul des profils.
+
+Par défaut, une précision spatiale de 2000m et une précision spatiale de 10j (décade) sont paramétrés pour tous les phylums, sans tenir compte des stades de vie.
+
+A terme, d'autres variables pourront compléter ces profils : habitats (habref) ou comportement (nidification, reproduction, migration...) notamment.
+
+*Configuration - Activer/désactiver les profils* :
+
+Il est possible de désactiver l'ensemble des fonctionnalités liées aux profils dans l'interface, en utilisant le paramètre suivant dans le fichier ``geonature/config/geonature_config.toml``
+
+::
+
+    [FRONTEND]
+      ENABLE_PROFILES = true/false
+
+
+Calcul des phénologies
+``````````````````````
+
+Pour chaque taxon, la phénologie est calculée en croisant dans un premier temps les périodes d'observations et, selon les paramètres, les stades de vie.
+
+Pour chacune des combinaisons obtenues (période x stade de vie), sont alors calculées :
+
+- L'altitude minimale (toutes données comprises)
+- L'altitude maximale (toutes données comprises)
+- L'altitude minimale fiable (en retirant x% de données extrêmes selon le paramètre ``proportion_kept_data``)
+- L'altitude maximale fiable (en retirant x% de données extrêmes selon le paramètre ``proportion_kept_data``)
+- Le nombre de données valides correspondantes
+
+*Exclusion des données extrêmes*
+
+Afin que des données exceptionnelles, bien que valides, ne soient pas considérées comme une "norme", les profils permettent d'exclure un certain pourcentage de données extrêmes. Pour ce faire :
+
+- Le nombre de données exclues est systématiquement arrondi à l'entier supérieur, pour les extrêmes "bas" et les extrêmes "hauts"
+- Aucune altitude fiable n'est calculée s'il y a davantage de données exclues que de données conservées
+- Le paramètre ``proportion_kept_data`` doit donc être compris entre 51 et 100% : en dessous de 50%, le nombre de données supprimées est supérieur au nombre de données conservées, aucune altitude fiable ne sera calculée. Si le paramètre est à 100%, les altitudes fiables seront identiques aux altitudes extrêmes observées pour la période (et le stade) donnés
+
+Il faut donc (1/[1- ``proportion_kept_data`` /100])+1 données pour que des altitudes fiables soient calculées, soit :
+
+- 101 données minimum par période/stade si ``proportion_kept_data`` =99
+- 51 données minimum par période/stade si ``proportion_kept_data`` =98
+- 21 données minimum par période/stade si ``proportion_kept_data`` =95
+- 11 données minimum par période/stade si ``proportion_kept_data`` =90
+- 3 données minimum par période/stade si ``proportion_kept_data`` =51
+
+
+.. include:: sensitivity.rst
+
 
 Fonctions
 """""""""
@@ -517,7 +667,55 @@ La base de données contient de nombreuses fonctions.
   --Function to return id_nomenclature depending on observation sensitivity
   --USAGE : SELECT ref_nomenclatures.calculate_sensitivity(240,21);
 
-TODO : A compléter...
+
+**gn_profiles**
+
+.. code:: sql
+
+  gn_profiles.get_profiles_parameters(mycdnom integer)
+  RETURNS TABLE (cd_ref integer, spatial_precision integer, temporal_precision_days integer, active_life_stage boolean,  distance smallint)
+  -- fonction permettant de récupérer les paramètres les plus adaptés (définis au plus proche du taxon) pour calculer le profil d'un taxon donné
+  -- par exemple, s'il existe des paramètres pour les "Animalia" des paramètres pour le renard, les paramètres du renard surcoucheront les paramètres Animalia pour cette espèce
+
+
+.. code:: sql
+
+  gn_profiles.check_profile_distribution(
+      in_geom geometry,
+      profil_geom geometry
+  )
+  RETURNS boolean
+  --fonction permettant de vérifier la cohérence d'une donnée d'occurrence en s'assurant que sa localisation est totalement incluse dans l'aire d'occurrences valide définie par le profil du taxon en question
+
+
+.. code:: sql
+
+  gn_profiles.check_profile_phenology(
+      in_cd_ref integer,
+      in_date_min date,
+      in_date_max date,
+      in_altitude_min integer,
+      in_altitude_max integer,
+      in_id_nomenclature_life_stage integer,
+      check_life_stage boolean
+  )
+  RETURNS boolean
+  --fonction permettant de vérifier la cohérence d'une donnée d'occurrence en s'assurant que sa phénologie (dates, altitude, stade de vie selon les paramètres) correspond bien à la phénologie valide définie par le profil du taxon en question
+  --La fonction renvoie 'false' pour les données trop imprécises (durée d'observation supérieure à la précision temporelle définie dans les paramètres des profils).
+
+
+.. code:: sql
+
+  gn_profiles.check_profile_altitudes(
+    in_alt_min integer,
+    in_alt_max integer,
+    profil_altitude_min integer,
+    profil_altitude_max integer
+  )
+  RETURNS boolean
+  --fonction permettant de vérifier la cohérence d'une donnée d'occurrence en s'assurant que son altitude se trouve entièrement comprise dans la fourchette altitudinale valide du taxon en question
+
+
 
 Tables transversales
 """"""""""""""""""""
@@ -632,6 +830,7 @@ Table contenant l’ensemble des id_areas intersectant les enregistrements de la
   - *Passer les couleurs en paramètres : table  gn_commons.t_parameters ?*
   - *Passer la fonction en immutable*
 
+
 Modularité
 ----------
 
@@ -675,6 +874,7 @@ Ainsi après chaque modification des fichiers de configuration globale, placez-v
 
     source venv/bin/activate
     geonature update_configuration
+    sudo systemctl restart geonature
     deactivate
 
 Configuration d'un gn_module
@@ -698,15 +898,10 @@ Exploitation
 Logs
 """"
 
-Les logs de GeoNature sont dans le répertoire ``<GEONATURE_DIRECTORY>/var/log/`` :
-
-- Logs d'installation de la BDD : ``install_db.log``
-- Logs d'installation de la BDD d'un module : ``install_<nom_module>_schema.log``
-- Logs de l'API : ``gn-errors.log``
-
-Les logs de TaxHub sont dans le répertoire ``/var/log/taxhub``:
-
-- Logs de l'API de TaxHub : ``taxhub-errors.log``
+* Logs d’installation de GeoNature : ``geonature/install/install.log``
+* Logs de GeoNature : ``/var/log/geonature.log``
+* Logs de TaxHub : ``/var/log/taxhub.log``
+* Logs de UsersHub : ``/var/log/usershub.log``
 
 Commandes GeoNature
 """""""""""""""""""
@@ -723,50 +918,27 @@ Le préfixe (venv) se met alors au début de votre invite de commande.
 
 Voici la liste des commandes disponibles (aussi disponibles en tapant la commande ``geonature --help``) :
 
-- activate_gn_module : Active un gn_module installé (Possibilité d'activer seulement le backend ou le frontend)
-- deactivate_gn_module : Désactive gn_un module activé (Possibilté de désactiver seulement le backend ou le frontend)
-- dev_back : Lance le backend en mode développement
-- dev_front : Lance le frontend en mode développement
-- generate_frontend_module_route : Génère ou regénère le fichier de routing du frontend en incluant les gn_module installés (Fait automatiquement lors de l'installation d'un module)
-- install_gn_module : Installe un gn_module
-- start_gunicorn : Lance l'API du backend avec gunicorn
-- supervisor : Exécute les commandes supervisor (``supervisor stop <service>``, ``supervisor reload``)
-- update_configuration : Met à jour la configuration du cœur de l'application. A exécuter suite à une modification du fichier ``geonature_config.toml``
-- update_module_configuration : Met à jour la configuration d'un module. A exécuter suite à une modification du fichier ``conf_gn_module.toml``.
+- ``activate_gn_module`` : Active un gn_module installé (Possibilité d'activer seulement le backend ou le frontend)
+- ``deactivate_gn_module`` : Désactive gn_un module activé (Possibilté de désactiver seulement le backend ou le frontend)
+- ``dev_back`` : Lance le backend en mode développement
+- ``dev_front`` : Lance le frontend en mode développement
+- ``generate_frontend_module_route`` : Génère ou regénère le fichier de routing du frontend en incluant les gn_module installés (Fait automatiquement lors de l'installation d'un module)
+- ``install_gn_module`` : Installe un gn_module
+- ``start_gunicorn`` : Lance l'API du backend avec gunicorn
+- ``update_configuration`` : Met à jour la configuration du cœur de l'application. A exécuter suite à une modification du fichier ``geonature_config.toml``
+- ``update_module_configuration`` : Met à jour la configuration d'un module. A exécuter suite à une modification du fichier ``conf_gn_module.toml``.
 
 Effectuez ``geonature <nom_commande> --help`` pour accéder à la documentation et à des exemples d'utilisation de chaque commande.
 
-Vérification des services
-"""""""""""""""""""""""""
+Démarrer / arrêter les API
+""""""""""""""""""""""""""
 
-Les API de GeoNature et de TaxHub sont lancées par deux serveurs http python indépendants (Gunicorn), eux-mêmes controlés par le supervisor.
+* Démarrer GeoNature : ``systemctl start geonature``
+* Arrêter GeoNature : ``systemctl stop geonature``
+* Redémarrer GeoNature : ``systemctl restart geonature``
+* Vérifier l’état de GeoNature : ``systemctl status geonature``
 
-Par défaut :
-
-- L'API de GeoNature tourne sur le port 8000
-- L'API de taxhub tourne sur le port 5000
-
-Pour vérifier que les API de GeoNature et de TaxHub sont lancées, exécuter la commande :
-
-.. code-block:: console
-
-    ps -aux |grep gunicorn
-
-La commande doit renvoyer 4 fois la ligne suivante pour GeoNature :
-
-.. code-block:: console
-
-    root      27074  4.6  0.1  73356 23488 ?        S    17:35   0:00       /home/theo/workspace/GN2/GeoNature/backend/venv/bin/python3 /home/theo/workspace/GN2/GeoNature/backend/venv/bin/gunicorn wsgi:app --error-log /var/log/geonature/api_errors.log --pid=geonature2.pid -w 4 -b 0.0.0.0:8000 -n geonature2
-
-et 4 fois la ligne suivante pour TaxHub :
-
-.. code-block:: console
-
-    root      27103 10.0  0.3 546188 63328 ?        Sl   17:35   0:00 /home/theo/workspace/GN2/TaxHub/venv/bin/python3.5 /home/theo/workspace/GN2/TaxHub/venv/bin/gunicorn server:app --access-logfile /var/log/taxhub/taxhub-access.log --error-log /var/log/taxhub/taxhub-errors.log --pid=taxhub.pid -w 4 -b 0.0.0.0:5000 -n taxhub
-
-Chaque ligne correspond à un worker Gunicorn.
-
-Si ces lignes n'apparaissent pas, cela signifie qu'une des deux API n'a pas été lancée ou a connu un problème à son lancement. Voir les logs des API pour plus d'informations.
+Les mêmes commandes sont disponibles pour TaxHub en remplacant ``geonature`` par ``taxhub``.
 
 Supervision des services
 """"""""""""""""""""""""
@@ -779,22 +951,6 @@ Supervision des services
 
 - Vérifier que les fichiers de logs de TaxHub et GeoNature ne sont pas trop volumineux pour la capacité du serveur
 - Vérifier que les services nécessaires au fonctionnement de l'application tournent bien (Apache, PostgreSQL)
-
-Stopper/Redémarrer les API
-"""""""""""""""""""""""""""
-
-Les API de GeoNature et de TaxHub sont gérées par le supervisor pour être lancées automatiquement au démarrage du serveur.
-
-Pour les stopper, exécuter les commandes suivantes :
-
-- GeoNature : ``sudo supervisorctl stop geonature2``
-- TaxHub : ``sudo supervisorctl stop taxhub``
-
-Pour redémarer les API :
-
-.. code-block:: console
-
-    sudo supervisorctl reload
 
 Maintenance
 """""""""""
@@ -821,9 +977,22 @@ Attention : ne pas stopper le backend (des opérations en BDD en cours pourraien
 
 - Redémarrage de PostgreSQL
 
-  Si vous effectuez des manipulations de PostgreSQL qui nécessitent un redémarrage du SGBD (``sudo service postgresql restart``), il faut impérativement lancer un redémarrage des API GeoNature et TaxHub pour que celles-ci continuent de fonctionner. Pour cela, lancez la commande ``sudo supervisorctl reload``.
+  Si vous effectuez des manipulations de PostgreSQL qui nécessitent un redémarrage du SGBD (``sudo service postgresql restart``), il faut impérativement lancer un redémarrage des API GeoNature et TaxHub pour que celles-ci continuent de fonctionner. Pour cela, lancez les commandes ``sudo systemctl restart geonature`` et ``sudo systemctl restart taxhub`` (GeoNature 2.8+).
 
   **NB**: Ne pas faire ces manipulations sans avertir les utilisateurs d'une perturbation temporaire des applications.
+
+Paramètres Gunicorn
+"""""""""""""""""""
+
+Voici les paramètres de Gunicorn par défaut :
+
+  * ``GUNICORN_PROC_NAME=geonature``
+  * ``GUNICORN_NUM_WORKERS=4``
+  * ``GUNICORN_HOST=127.0.0.1``
+  * ``GUNICORN_PORT=8000``
+  * ``GUNICORN_TIMEOUT=30``
+
+Pour modifier une de ces variables, créer un fichier ``environ`` à la racine de votre dossier GeoNature, et indiquer la variable d’environnement avec sa valeur modifiée.
 
 Sauvegarde et restauration
 --------------------------
@@ -893,10 +1062,9 @@ Restauration
         sudo -n -u postgres -s createdb -O <MON_USER> geonature2db
         sudo -n -u postgres -s psql -d geonature2db -c "CREATE EXTENSION IF NOT EXISTS postgis;"
         sudo -n -u postgres -s psql -d geonature2db -c "CREATE EXTENSION IF NOT EXISTS hstore;"
-        sudo -n -u postgres -s psql -d geonature2db -c "CREATE EXTENSION IF NOT EXISTS plpgsql WITH SCHEMA pg_catalog; COMMENT ON EXTENSION plpgsql IS 'PL/pgSQL procedural language';"
         sudo -n -u postgres -s psql -d geonature2db -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'
         sudo -n -u postgres -s psql -d geonature2db -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-        sudo -n -u postgres -s psql -d geonature2db -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"
+        sudo -n -u postgres -s psql -d geonature2db -c "CREATE EXTENSION IF NOT EXISTS postgis_raster;"  # postgis>=3.0 (Debian 11)
         
 
   - Restaurer la BDD à partir du backup
@@ -924,13 +1092,8 @@ Restauration
         cd <GEONATURE_DIRECTORY>/external_modules
         tar -zxvf <MY_BACKUP_DIRECTORY>/201803151036-external_modules.tar.gz
 
-* Relancer l'application :
+* Relancer l’application GeoNature
 
-  .. code-block:: console
-
-    cd /<MY_USER>/geonature/frontend
-    npm run build
-    sudo supervisorctl reload
 
 Customisation
 -------------
@@ -945,11 +1108,11 @@ Pour cela exécuter la commande suivante depuis le répertoire ``frontend``
 
 L'application est désormais disponible sur un serveur de développement à la même addresse que précédemment, mais sur le port 4200 : http://test.geonature.fr:4200
 
-Ouvrez un nouveau terminal (pour laisser tourner le serveur de développement), puis modifier la variable ``URL_APPLICATION`` dans le fichier ``geonature_config.toml`` en mettant l'adresse ci-dessus et relancer l'application (``sudo supervisorctl restart geonature2``)
+Ouvrez un nouveau terminal (pour laisser tourner le serveur de développement), puis modifier la variable ``URL_APPLICATION`` dans le fichier ``geonature_config.toml`` en mettant l'adresse ci-dessus et relancer l'application (``sudo supervisorctl restart geonature2`` ou ``sudo systemctl restart geonature``)
 
 A chaque modification d'un fichier du frontend, une compilation rapide est relancée et votre navigateur se rafraichit automatiquement en intégrant les dernières modifications.
 
-Une fois les modifications terminées, remodifier le fichier ``geonature_config.toml`` pour remettre l'URL initiale, relancez l'application (``sudo supervisorctl restart geonature2``), puis relancez la compilation du frontend (``npm run build``). Faites enfin un ``ctrl+c`` dans le terminal ou le frontend a été lancé pour stopper le serveur de développement.
+Une fois les modifications terminées, remodifier le fichier ``geonature_config.toml`` pour remettre l'URL initiale, relancez l'application (``sudo supervisorctl restart geonature2`` ou ``sudo systemctl restart geonature``), puis relancez la compilation du frontend (``npm run build``). Faites enfin un ``ctrl+c`` dans le terminal ou le frontend a été lancé pour stopper le serveur de développement.
 
 Si la manipulation vous parait compliquée, vous pouvez suivre la documentation qui suit, qui fait relancer la compilation du frontend à chaque modification.
 
@@ -1077,7 +1240,9 @@ GeoNature est fourni avec des données géographiques de base sur la métropôle
 
 * Videz le contenu des tables ``ref_geo.dem`` et éventuellement ``ref_geo.dem_vector``
 * Uploadez le(s) fichier(s) du MNT sur le serveur
-* Suivez la procédure de chargement du MNT en l'adaptant : https://github.com/PnX-SI/GeoNature/blob/master/install/install_db.sh#L295-L299
+* Suivez la procédure de chargement du MNT en l'adaptant :
+  * https://github.com/PnX-SI/GeoNature/blob/master/backend/geonature/migrations/versions/1715cf31a75d_insert_ign_250m_bd_alti_in_dem.py
+  * https://github.com/PnX-SI/GeoNature/blob/master/backend/geonature/migrations/versions/87651375c2e8_vectorize_ign_bd_alti.py
 
 *TODO : Procédure à améliorer et simplifier : https://github.com/PnX-SI/GeoNature/issues/235*
 
@@ -1282,8 +1447,8 @@ Cet espace est activable grâce au paramètre ``ENABLE_USER_MANAGEMENT``. Par d�
         ENABLE_SIGN_UP = true
         ENABLE_USER_MANAGEMENT = true
 
-Rendre GeoNature accessible sans authentification
---------------------------------------------------
+Accès public
+------------
 
 Cette section de la documentation concerne l'implémentation d'un utilisateur-lecteur pour votre instance GeoNature. 
 
@@ -1316,6 +1481,7 @@ Etapes :
 
     $ source backend/venv/bin/activate
     $ geonature update_configuration
+    $ sudo systemctl restart geonature
 ..
 
 A ce moment là, cet utilisateur a tous les droits sur GeoNature.
@@ -1669,20 +1835,20 @@ L'ensemble des paramètres de configuration du module se trouve dans le fichier 
 
 **1.** Modifier les filtres géographiques disponibles par défaut dans l'interface de recherche.
 
-Editer la variable ``AREA_FILTERS`` en y ajoutant le label et l'ID du type d'entité géographique que vous souhaitez rajouter. Voir table ``ref_geo.bib_areas_types``. Dans l'exemple on ajoute le type ZNIEFF1 (``id_type = 3``). Attention, dans ce cas les entités géographiques correspondantes au type 3, doivent également être présentes dans la table ``ref_geo.l_areas``.
+Editer la variable ``AREA_FILTERS`` en y ajoutant le label et le code du type d'entité géographique que vous souhaitez rajouter. Voir table ``ref_geo.bib_areas_types``. Dans l'exemple on ajoute le type ZNIEFF1 (``code_type = "ZNIEFF1"``). Attention, dans ce cas les entités géographiques correspondantes au type `ZNIEFF1`, doivent également être présentes dans la table ``ref_geo.l_areas``.
 Attention : Si des données sont déjà présentes dans la synthèse et que l'on ajoute de nouvelles entités géographiques à ``ref_geo.l_areas``, il faut également recalculer les valeurs de la table ``gn_synthese.cor_area_synthese`` qui assure la correspondance entre les données de la synthèse et les entités géographiques.
 
 ::
 
     [SYNTHESE]
         # Liste des entités géographiques sur lesquels les filtres
-        # géographiques de la synthese s'appuient (id_area = id de l'entité géo, table ref_geo.bib_areas_types)
+        # géographiques de la synthese s'appuient (type_code = code du type de l'entité géo, table ref_geo.bib_areas_types)
         AREA_FILTERS = [
-            { label = "Communes", id_type = 25 },
-            { label = "ZNIEFF1", id_type = 3 },
+            { label = "Communes", "type_code": "COM" },
+            { label = "ZNIEFF1", "type_code": "ZNIEFF1" },
         ]
 
-Il est aussi possible de passer plusieurs ``id_types`` regroupés dans un même filtre géographique (exemple : ``{ label = "Zonages réglementaires", id_type = [22, 23] }``).
+Il est aussi possible de passer plusieurs ``type_code`` regroupés dans un même filtre géographique (exemple : ``{ label = "Zonages réglementaires", type_code = ["ZC", "ZPS", "SIC"] }``).
 
 **2.** Configurer les champs des exports
 
@@ -1867,49 +2033,21 @@ Configuration
 Le parametrage du module VALIDATION se fait depuis le fichier ``/home/`whoami`/geonature/contrib/gn_module_validation/config/conf_gn_module.toml``
 Après toute modification de la configuration d'un module, il faut regénérer le fichier de configuration du frontend comme expliqué ici : `Configuration d'un gn_module`_
 
-
 Liste des champs visibles
 `````````````````````````
 
-La configuration des champs de la liste se fait via deux paramètres:
-
-- ``COLUMNS_API_VALIDATION_WEB_APP``
-
-Liste des colonnes qui seront récupérées en plus des colonnes obligatoires. Les colonnes disponibles correspondent à celles présentent dans la vue ``v_synthese_validation_forwebapp``
+Gestion de l'affichage des colonnes de la liste via le paramètre ``COLUMN_LIST`` :
 
 ::
 
-    "id_nomenclature_valid_status"
-    "id_synthese"
-    "entity_source_pk_value"
-    "validation_auto"
-    "cd_nom"
-    "meta_update_date"
-    "cd_nomenclature_validation_status"
-    "mnemonique"
-    "label_default"
-    "unique_id_sinp"
-    "geojson"
-    "nom_vern"
-    "lb_nom"
-    "nom_vern_or_lb_nom"
-
-- ``LIST_COLUMNS_FRONTEND``
-
-Gestion de l'affichage des colonnes de la liste
-
-::
-
-    [[LIST_COLUMNS_FRONTEND]]
-    prop = "observers" # Nom de la propriété en base
-    name = "Observateurs" # Titre de la colonne
+    [[COLUMN_LIST]]
+    column_label = "nomenclature_life_stage.label_default" # Champs de la synthèse, éventuellement en suivant des relationships
+    column_name = "Stade de vie" # Titre de la colonne
     min_width = 100 # Taille minimale de la colonne
     max_width = 100 # Taille maximale de la colonne
 
-
-
-Mail
-````
+E-mail
+``````
 
 Il est possible de personnaliser le message du mail envoyé aux observateurs.
 Pour ce faire il faut modifier les  paramètres ``MAIL_BODY`` et ``MAIL_SUBJECT``
@@ -1918,8 +2056,9 @@ Pour afficher dans le mail des données relatives à l'observation ou au taxon i
 ``${ d.NOM_PROPRIETE }``
 
 Liste des propriétés disponibles :
-  - communes : liste des communes
-  - medias : Titre, auteur et lien vers le média associée
-  - data_link : lien vers l'observation dans son module de saisie
-  - tous les champs de la synthèse (acquisition_framework, altitude_max, altitude_min, bio_status, blurring, cd_hab, cd_nom, comment_context, comment_description, date_min, depth_max, depth_min, determiner, diffusion_level, digital_proof, entity_source_pk_value, exist_proof, grp_method, grp_typ, last_action, life_stage, meta_create_date, meta_update_date, meta_v_taxref, meta_validation_date, nat_obj_geo, naturalness, nom_cite, non_digital_proof, obj_count, obs_technique, observation_status, observers, occ_behaviour, occ_stat_biogeo, place_name, precision, sample_number_proof, sensitivity, sex, source, type_count, unique_id_sinp, unique_id_sinp_grp, valid_status, validation_comment)
-  - tous les champs du taxon (cd_nom, cd_ref, cd_sup, cd_taxsup, regne, ordre, classe, famille, group1_inpn, group2_inpn, id_rang, nom_complet, nom_habitat, nom_rang, nom_statut, nom_valide, nom_vern)
+
+- communes : liste des communes
+- medias : Titre, auteur et lien vers le média associée
+- data_link : lien vers l'observation dans son module de saisie
+- tous les champs de la synthèse (acquisition_framework, altitude_max, altitude_min, bio_status, blurring, cd_hab, cd_nom, comment_context, comment_description, date_min, depth_max, depth_min, determiner, diffusion_level, digital_proof, entity_source_pk_value, exist_proof, grp_method, grp_typ, last_action, life_stage, meta_create_date, meta_update_date, meta_v_taxref, meta_validation_date, nat_obj_geo, naturalness, nom_cite, non_digital_proof, obj_count, obs_technique, observation_status, observers, occ_behaviour, occ_stat_biogeo, place_name, precision, sample_number_proof, sensitivity, sex, source, type_count, unique_id_sinp, unique_id_sinp_grp, valid_status, validation_comment)
+- tous les champs du taxon (cd_nom, cd_ref, cd_sup, cd_taxsup, regne, ordre, classe, famille, group1_inpn, group2_inpn, id_rang, nom_complet, nom_habitat, nom_rang, nom_statut, nom_valide, nom_vern)
