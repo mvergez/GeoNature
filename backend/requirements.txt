@@ -180,6 +180,7 @@ markupsafe==2.0.1
     #   -r requirements-common.txt
     #   jinja2
     #   mako
+    #   pypnusershub
     #   wtforms
 marshmallow==3.16.0
     # via
@@ -239,7 +240,7 @@ pypn-ref-geo==1.1.0
     # via -r requirements-dependencies.in
 pypnnomenclature==1.5.1
     # via -r requirements-dependencies.in
-pypnusershub==1.5.9
+pypnusershub==1.5.10
     # via -r requirements-dependencies.in
 python-dateutil==2.8.2
     # via
