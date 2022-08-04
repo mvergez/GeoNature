@@ -203,6 +203,7 @@ numpy==1.21.6
     # via
     #   -r requirements-common.txt
     #   geog
+    #   utils-flask-sqlalchemy-geo
 packaging==21.3
     # via
     #   -r requirements-common.txt
@@ -285,6 +286,7 @@ sqlalchemy==1.3.24
     #   pypn-ref-geo
     #   pypnusershub
     #   taxhub
+    #   utils-flask-sqlalchemy-geo
     #   wtforms-sqlalchemy
 taxhub==1.9.4
     # via -r requirements-dependencies.in
@@ -307,7 +309,7 @@ utils-flask-sqlalchemy==0.2.6
     #   pypnusershub
     #   taxhub
     #   utils-flask-sqlalchemy-geo
-utils-flask-sqlalchemy-geo==0.2.2
+utils-flask-sqlalchemy-geo==0.2.4
     # via
     #   -r requirements-dependencies.in
     #   pypn-ref-geo
