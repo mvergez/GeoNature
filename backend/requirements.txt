@@ -124,6 +124,7 @@ flask-migrate==3.1.0
     #   pypn-habref-api
     #   pypnnomenclature
     #   taxhub
+    #   utils-flask-sqlalchemy
 flask-sqlalchemy==2.5.1
     # via
     #   -r requirements-common.txt
@@ -298,7 +299,7 @@ toml==0.10.2
     # via -r requirements-common.txt
 urllib3==1.26.9
     # via requests
-utils-flask-sqlalchemy==0.2.6
+utils-flask-sqlalchemy==0.3.0
     # via
     #   -r requirements-dependencies.in
     #   pypn-habref-api
