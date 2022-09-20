@@ -132,21 +132,13 @@ geojson==2.5.0
     #   -r requirements-common.in
     #   utils-flask-sqlalchemy-geo
 gunicorn==20.1.0
-    # via -r requirements-common.in
+    # via
+    #   -r requirements-common.in
+    #   taxhub
 html5lib==1.1
     # via weasyprint
 idna==3.3
     # via requests
-importlib-metadata==4.12.0
-    # via
-    #   alembic
-    #   click
-    #   flask
-    #   kombu
-    #   mako
-    #   redis
-importlib-resources==5.9.0
-    # via alembic
 itsdangerous==2.1.2
     # via
     #   flask
@@ -268,7 +260,7 @@ sqlalchemy==1.3.24
     #   taxhub
     #   utils-flask-sqlalchemy-geo
     #   wtforms-sqlalchemy
-taxhub==1.10.0
+taxhub==1.10.1
     # via
     #   -r requirements-dependencies.in
     #   pypnnomenclature
@@ -279,11 +271,6 @@ tinycss2==1.1.1
     #   weasyprint
 toml==0.10.2
     # via -r requirements-common.in
-typing-extensions==4.3.0
-    # via
-    #   async-timeout
-    #   importlib-metadata
-    #   redis
 urllib3==1.26.12
     # via
     #   botocore
@@ -329,10 +316,6 @@ wtforms-sqlalchemy==0.3
     # via -r requirements-common.in
 xmltodict==0.13.0
     # via -r requirements-common.in
-zipp==3.8.1
-    # via
-    #   importlib-metadata
-    #   importlib-resources
 
 # The following packages are considered to be unsafe in a requirements file:
 # setuptools
