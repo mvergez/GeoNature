@@ -219,6 +219,15 @@ class Permission(db.Model):
         backref="permissions",
     )
 
+    availability = db.relationship(
+        PermissionAvailable,
+        primaryjoin=sa.and_(
+            foreign(id_module) == PermissionAvailable.id_module,
+            foreign(id_object) == PermissionAvailable.id_object,
+            foreign(id_action) == PermissionAvailable.id_action,
+        ),
+    )
+
     filters_fields = {
         "SCOPE": scope_value,
         "SENSITIVITY": sensitivity_filter,

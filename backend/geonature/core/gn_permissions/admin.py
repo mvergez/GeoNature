@@ -541,6 +541,21 @@ admin.add_view(
 )
 
 
+class PermissionAvailableAdmin(CruvedProtectedMixin, ModelView):
+    module_code = "ADMIN"
+    object_code = "PERMISSIONS"
+
+    column_labels = {
+        "scope": "Portée",
+        "object": "Objet",
+        "scope_filter": "Filtre appartenance",
+    }
+    column_formatters = {
+        "module": lambda v, c, m, p: m.module.module_code,
+        "object": lambda v, c, m, p: m.object.code_object,
+    }
+
+
 admin.add_view(
     ObjectAdmin(
         PermObject,
@@ -570,5 +585,15 @@ admin.add_view(
         name="Permissions disponibles",
         category="Permissions",
         endpoint="permissions/availablepermission",
+    )
+)
+
+
+admin.add_view(
+    PermissionAvailableAdmin(
+        PermissionAvailable,
+        db.session,
+        name="Permissions disponibles",
+        category="Permissions",
     )
 )
