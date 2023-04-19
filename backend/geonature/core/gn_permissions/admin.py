@@ -549,6 +549,7 @@ class PermissionAvailableAdmin(CruvedProtectedMixin, ModelView):
         "scope": "Portée",
         "object": "Objet",
         "scope_filter": "Filtre appartenance",
+        "sensitivity_filter": "Filtre sensibilité",
     }
     column_formatters = {
         "module": lambda v, c, m, p: m.module.module_code,

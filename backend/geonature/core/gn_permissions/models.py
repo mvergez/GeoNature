@@ -243,6 +243,11 @@ class Permission(db.Model):
         return (not a) <= (not b)
 
     @staticmethod
+    def __SENSITIVITY_le__(a, b):
+        # False only if: A is False and b is True
+        return (not a) <= (not b)
+
+    @staticmethod
     def __default_le__(a, b):
         return a == b or b is None
 
