@@ -580,6 +580,95 @@ class PermissionAvailableAdmin(CruvedProtectedMixin, ModelView):
     }
 
 
+class RolePermAdmin(CruvedProtectedMixin, ModelView):
+    module_code = "ADMIN"
+    object_code = "PERMISSIONS"
+
+    can_create = False
+    can_edit = False
+    can_delete = False
+    can_export = False
+    can_view_details = True
+
+    column_select_related_list = ("permissions",)
+    column_labels = {
+        "nom_role": "Nom",
+        "prenom_role": "Prénom",
+        "groups": "Groupes",
+        "permissions": "Permissions",
+        "permissions_count": "Nombre de permissions",
+    }
+    column_formatters = {
+        "groups": groups_formatter,
+        "permissions_count": permissions_count_formatter,
+    }
+    column_formatters_detail = {
+        "groups": groups_formatter,
+        "permissions": permissions_formatter,
+        "permissions_count": permissions_count_formatter,
+    }
+
+
+class GroupPermAdmin(RolePermAdmin):
+    column_list = (
+        "nom_role",
+        "permissions_count",
+    )
+    column_details_list = ("nom_role", "permissions_count", "permissions")
+
+    def get_query(self):
+        # TODO: filter_by_app
+        return super().get_query().filter_by(groupe=True)
+
+
+class UserPermAdmin(RolePermAdmin):
+    column_list = (
+        "identifiant",
+        "nom_role",
+        "prenom_role",
+        "groups",
+        "permissions_count",
+    )
+    column_labels = {
+        **RolePermAdmin.column_labels,
+        "permissions_count": "Nombre de permissions non héritées",
+    }
+    column_details_list = (
+        "identifiant",
+        "nom_role",
+        "prenom_role",
+        "groups",
+        "permissions_count",
+        "permissions",
+    )
+
+    def get_query(self):
+        # TODO: filter_by_app
+        return super().get_query().filter_by(groupe=False)
+
+
+admin.add_view(
+    GroupPermAdmin(
+        User,
+        db.session,
+        name="Groupes",
+        category="Permissions",
+        endpoint="permissions/group",
+    )
+)
+
+
+admin.add_view(
+    UserPermAdmin(
+        User,
+        db.session,
+        name="Utilisateurs",
+        category="Permissions",
+        endpoint="permissions/user",
+    )
+)
+
+
 admin.add_view(
     ObjectAdmin(
         PermObject,
@@ -619,5 +708,6 @@ admin.add_view(
         db.session,
         name="Permissions disponibles",
         category="Permissions",
+        endpoint="permissions/availablepermission",
     )
 )
