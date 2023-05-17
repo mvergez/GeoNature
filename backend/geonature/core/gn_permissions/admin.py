@@ -578,6 +578,17 @@ class PermissionAvailableAdmin(CruvedProtectedMixin, ModelView):
         "module": lambda v, c, m, p: m.module.module_code,
         "object": lambda v, c, m, p: m.object.code_object,
     }
+    column_sortable_list = (
+        ("module", "module.module_code"),
+        ("object", "object.code_object"),
+        ("action", "action.code_action"),
+    )
+    column_default_sort = [
+        ("module.module_code", False),
+        ("object.code_object", False),
+        ("id_action", False),
+    ]
+    form_columns = ("scope_filter", "sensitivity_filter")
 
 
 class RolePermAdmin(CruvedProtectedMixin, ModelView):
