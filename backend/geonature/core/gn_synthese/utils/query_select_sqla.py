@@ -127,7 +127,7 @@ class SyntheseQuery:
                 # push the joined table in _already_joined_table list
                 self._already_joined_table.append(right_table)
 
-    def filter_query_with_permissions(self, user, permissions):
+    def _filter_query_with_permissions(self, user, permissions):
         """
         Filter the query with the permissions of a user
         """
@@ -138,25 +138,25 @@ class SyntheseQuery:
         )
         datasets_by_scope = {}  # to avoid fetching datasets several time for same scope
         permissions_filters = []
-        nomenclature_non_sensible = None
+        non_diffusion = None
         for perm in permissions:
             if perm.has_other_filters_than("SCOPE", "SENSITIVITY"):
                 continue
             perm_filters = []
             if perm.sensitivity_filter:
-                if nomenclature_non_sensible is None:
-                    nomenclature_non_sensible = (
+                if non_diffusion is None:
+                    non_diffusion = (
                         TNomenclatures.query.filter(
                             TNomenclatures.nomenclature_type.has(
                                 BibNomenclaturesTypes.mnemonique == "SENSIBILITE"
                             )
                         )
-                        .filter(TNomenclatures.cd_nomenclature == "0")
+                        .filter(TNomenclatures.cd_nomenclature == "4")
                         .one()
                     )
                 perm_filters.append(
                     self.model.id_nomenclature_sensitivity
-                    == nomenclature_non_sensible.id_nomenclature
+                    != non_diffusion.id_nomenclature
                 )
             if perm.scope_value:
                 if perm.scope_value not in datasets_by_scope:
@@ -178,9 +178,13 @@ class SyntheseQuery:
             else:
                 permissions_filters.append(sa.true())
         if permissions_filters:
-            self.query = self.query.where(or_(*permissions_filters))
+            return or_(*permissions_filters)
         else:
-            self.query = self.query.where(sa.false())
+            return sa.false()
+    
+    def filter_query_with_permissions(self, user, permissions):
+        where_clause = self._filter_query_with_permissions(user=user, permissions=permissions)
+        self.query = self.query.where(where_clause)
 
     def filter_query_with_cruved(self, user, scope):
         """
