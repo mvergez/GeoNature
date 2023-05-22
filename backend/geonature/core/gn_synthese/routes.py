@@ -14,6 +14,7 @@ from flask import (
     jsonify,
     g,
 )
+from pypnnomenclature.models import BibNomenclaturesTypes, TNomenclatures
 from werkzeug.exceptions import Forbidden, NotFound, BadRequest, Conflict
 from werkzeug.datastructures import MultiDict
 from sqlalchemy import distinct, func, desc, asc, select, case
@@ -74,6 +75,31 @@ routes = Blueprint("gn_synthese", __name__)
 ############################################
 ########### GET OBSERVATIONS  ##############
 ############################################
+
+
+def split_blurring_permissions(permissions):
+    return filter(lambda p: p.sensitivity_filter, permissions), filter(
+        lambda p: not p.sensitivity_filter, permissions
+    )
+
+
+def build_sensitive_area_filters(query, current_user, sensitive_permissions):
+    where_clause = query._filter_query_all_filters(current_user, sensitive_permissions)
+    sensitive_nomenc = (
+        TNomenclatures.query.filter(
+            TNomenclatures.nomenclature_type.has(BibNomenclaturesTypes.mnemonique == "SENSIBILITE")
+        )
+        .filter(TNomenclatures.cd_nomenclature != "0")
+        .one()
+    )
+
+    return sa.and_(where_clause.id_nomenclature_sensitivity == sensitive_nomenc), sa.and_(
+        where_clause.id_nomenclature_sensitivity != sensitive_nomenc
+    )
+
+
+def build_sensitive_area_query(query):
+    pass
 
 
 @routes.route("/for_web", methods=["GET", "POST"])
@@ -188,9 +214,17 @@ def get_observations_for_web(permissions):
         VSyntheseForWebApp,
         obs_query,
         filters,
-    )
-    synthese_query_class.filter_query_all_filters(g.current_user, permissions)
+    )    
     obs_query = synthese_query_class.query
+
+    # PERMISSIONS
+    sensitive, unsensitive = split_blurring_permissions(permissions)
+    sensitive_where_clause, unsensitive_where_clause = build_sensitive_area_filters(query, g.current_user, sensitive_permissions=sensitive)
+    unsensitive_unsensitive_where_clause = query._filter_query_all_filters(g.current_user, unsensitive)
+
+    obs_query = sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause)
+    #synthese_query_class.filter_query_all_filters(g.current_user, permissions)
+
 
     if output_format == "grouped_geom_by_areas":
         # SQLAlchemy 1.4: replace column by add_columns
