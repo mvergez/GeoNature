@@ -452,8 +452,8 @@ class Synthese(DB.Model):
         for perm in permissions:
             if perm.has_other_filters_than("SCOPE", "SENSITIVITY"):
                 continue  # unsupported filters
-            if perm.sensitivity_filter and self.nomenclature_sensitivity.cd_nomenclature != "0":
-                continue  # sensitivity filter denied access, check next permission
+            if perm.sensitivity_filter and self.nomenclature_sensitivity.cd_nomenclature == "4":
+                continue
             if perm.scope_value:
                 if g.current_user == self.digitiser:
                     return True
