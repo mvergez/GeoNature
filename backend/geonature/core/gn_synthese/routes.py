@@ -437,6 +437,37 @@ def get_one_synthese(permissions, id_synthese):
     if not synthese.has_instance_permission(permissions=permissions):
         raise Forbidden()
 
+    sensitivity, _ = split_blurring_permissions(permissions=permissions)
+
+    sensitivity = list(sensitivity)
+    if len(sensitivity) != 0:
+        BlurringArea = aliased(LAreas)
+        # Treat sensi
+        inner = (
+            sa.join(CorAreaSynthese, BlurringArea)
+            .join(BibAreasTypes)
+            .join(
+                cor_sensitivity_area_type,
+                cor_sensitivity_area_type.c.id_area_type == BibAreasTypes.id_type,
+            )
+        )
+        outer = (
+            inner,
+            sa.and_(
+                Synthese.id_synthese == CorAreaSynthese.id_synthese,
+                Synthese.id_nomenclature_sensitivity
+                == cor_sensitivity_area_type.c.id_nomenclature_sensitivity
+            ),
+        )
+        query = (
+            select(Synthese.option[func.coalesce(BlurringArea.geom.st_transform(4326), Synthese.the_geom_4326)])
+            .select_from(sa.outerjoin(Synthese, *outer))
+            .where(Synthese.id_synthese == id_synthese)
+        )
+        res = db.session.execute(query).fetchone()[0]
+        # db.session.expunge(synthese)
+        synthese.the_geom_4326 = res
+
     geofeature = synthese.as_geofeature(fields=Synthese.nomenclature_fields + fields)
     return jsonify(geofeature)
 
