@@ -219,15 +219,6 @@ class Permission(db.Model):
         backref="permissions",
     )
 
-    availability = db.relationship(
-        PermissionAvailable,
-        primaryjoin=sa.and_(
-            foreign(id_module) == PermissionAvailable.id_module,
-            foreign(id_object) == PermissionAvailable.id_object,
-            foreign(id_action) == PermissionAvailable.id_action,
-        ),
-    )
-
     filters_fields = {
         "SCOPE": scope_value,
         "SENSITIVITY": sensitivity_filter,
@@ -236,11 +227,6 @@ class Permission(db.Model):
     @staticmethod
     def __SCOPE_le__(a, b):
         return b is None or (a is not None and a <= b)
-
-    @staticmethod
-    def __SENSITIVITY_le__(a, b):
-        # False only if: A is False and b is True
-        return (not a) <= (not b)
 
     @staticmethod
     def __SENSITIVITY_le__(a, b):
