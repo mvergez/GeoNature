@@ -19,7 +19,7 @@ from pypnnomenclature.models import BibNomenclaturesTypes, TNomenclatures
 from werkzeug.exceptions import Forbidden, NotFound, BadRequest, Conflict
 from werkzeug.datastructures import MultiDict
 from sqlalchemy import distinct, func, desc, asc, select, case
-from sqlalchemy.orm import joinedload, lazyload, selectinload
+from sqlalchemy.orm import joinedload, lazyload, selectinload, contains_eager
 from geojson import FeatureCollection, Feature
 import sqlalchemy as sa
 from sqlalchemy.orm import load_only, aliased, Load
@@ -385,6 +385,8 @@ def get_one_synthese(permissions, id_synthese):
                 joinedload("nomenclature_financing_type"),
             ),
         ),
+        # Used to check the sensitivity after
+        joinedload("nomenclature_sensitivity"),
         lazyload("areas").options(
             joinedload("area_type"),
         ),
@@ -440,34 +442,65 @@ def get_one_synthese(permissions, id_synthese):
     sensitivity, _ = split_blurring_permissions(permissions=permissions)
 
     sensitivity = list(sensitivity)
-    if len(sensitivity) != 0:
-        BlurringArea = aliased(LAreas)
-        # Treat sensi
+
+    # If sensitivity permissions and obs sensitive. FIXME: HardCoded "0"?
+    if len(sensitivity) != 0 and synthese.nomenclature_sensitivity.cd_nomenclature != "0":
+        # Use a cte to have the areas associated with the current id_synthese
+        cte = select([CorAreaSynthese]).where(CorAreaSynthese.id_synthese == id_synthese).cte()
+        # Blurred area of the observation
+        BlurredObsArea = aliased(LAreas)
+        # Blurred area type of the observation
+        BlurredObsAreaType = aliased(BibAreasTypes)
+        # Types "larger" or equal in area hierarchy size that the blurred area type
+        BlurredAreaTypes = aliased(BibAreasTypes)
+        # Areas associates with the BlurredAreaTypes
+        BlurredAreas = aliased(LAreas)
+
+        # Inner join that retrieve the blurred area of the obs and the bigger areas
+        # used for "Zonages" in Synthese
         inner = (
-            sa.join(CorAreaSynthese, BlurringArea)
-            .join(BibAreasTypes)
+            sa.join(CorAreaSynthese, BlurredObsArea)
+            .join(BlurredObsAreaType)
             .join(
                 cor_sensitivity_area_type,
-                cor_sensitivity_area_type.c.id_area_type == BibAreasTypes.id_type,
+                cor_sensitivity_area_type.c.id_area_type == BlurredObsAreaType.id_type,
             )
+            .join(
+                BlurredAreaTypes,
+                BlurredAreaTypes.size_hierarchy >= BlurredObsAreaType.size_hierarchy,
+            )
+            .join(BlurredAreas, BlurredAreaTypes.id_type == BlurredAreas.id_type)
+            .join(cte, cte.c.id_area == BlurredAreas.id_area)
         )
+
+        # Outer join to join CorAreaSynthese taking into account the sensitivity
         outer = (
             inner,
             sa.and_(
                 Synthese.id_synthese == CorAreaSynthese.id_synthese,
                 Synthese.id_nomenclature_sensitivity
-                == cor_sensitivity_area_type.c.id_nomenclature_sensitivity
+                == cor_sensitivity_area_type.c.id_nomenclature_sensitivity,
             ),
         )
-        query = (
-            select(Synthese.option[func.coalesce(BlurringArea.geom.st_transform(4326), Synthese.the_geom_4326)])
-            .select_from(sa.outerjoin(Synthese, *outer))
-            .where(Synthese.id_synthese == id_synthese)
-        )
-        res = db.session.execute(query).fetchone()[0]
-        # db.session.expunge(synthese)
-        synthese.the_geom_4326 = res
 
+        query = (
+            DB.session.query(
+                Synthese,
+                func.coalesce(BlurredObsArea.geom.st_transform(4326), Synthese.the_geom_4326),
+            )
+            .outerjoin(*outer)
+            # To populate Synthese.areas directly
+            .options(contains_eager(Synthese.areas.of_type(BlurredAreas)))
+            .filter(Synthese.id_synthese == id_synthese)
+        )
+
+        # Use one here not first
+        synthese_for_areas, the_geom = query.one()
+        # Careful: do not db.session.commit after these lines !!!
+        synthese.the_geom_4326 = the_geom
+        synthese.areas = synthese_for_areas.areas
+
+    # Careful: do not db.session.commit before and after these lines
     geofeature = synthese.as_geofeature(fields=Synthese.nomenclature_fields + fields)
     return jsonify(geofeature)
 
