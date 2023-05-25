@@ -158,8 +158,7 @@ class SyntheseQuery:
                         .one()
                     )
                 perm_filters.append(
-                    self.model.id_nomenclature_sensitivity
-                    != non_diffusion.id_nomenclature
+                    self.model.id_nomenclature_sensitivity != non_diffusion.id_nomenclature
                 )
             if perm.scope_value:
                 if perm.scope_value not in datasets_by_scope:
@@ -184,7 +183,7 @@ class SyntheseQuery:
             return or_(*permissions_filters)
         else:
             return sa.false()
-    
+
     def filter_query_with_permissions(self, user, permissions):
         where_clause = self._filter_query_with_permissions(user=user, permissions=permissions)
         self.query = self.query.where(where_clause)
