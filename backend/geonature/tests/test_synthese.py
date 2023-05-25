@@ -688,27 +688,39 @@ class TestSynthese:
 def synthese_module():
     return TModules.query.filter_by(module_code="SYNTHESE").one()
 
+
 @pytest.fixture()
 def synthese_read_permissions(synthese_module):
     def _synthese_read_permissions(role, scope_value, action="R", **kwargs):
         action = PermAction.query.filter_by(code_action=action).one()
         with db.session.begin_nested():
             db.session.add(
-                        Permission(
-                            role=role, action=action, module=synthese_module, scope_value=scope_value, **kwargs
-                        )
-                    )
+                Permission(
+                    role=role,
+                    action=action,
+                    module=synthese_module,
+                    scope_value=scope_value,
+                    **kwargs,
+                )
+            )
+
     return _synthese_read_permissions
-    
+
 
 @pytest.mark.usefixtures("client_class", "temporary_transaction")
 class TestSyntheseBlurring:
-    def test_split_blurring_permissions(self, app, users, synthese_module, synthese_read_permissions):
+    def test_split_blurring_permissions(
+        self, app, users, synthese_module, synthese_read_permissions
+    ):
         current_user = users["self_user"]
         with app.test_request_context(headers=logged_user_headers(current_user)):
             app.preprocess_request()
-            permissions = get_permissions(action_code="R", id_role=current_user.id_role,
-                                          module_code=synthese_module.module_code, object_code="ALL")
+            permissions = get_permissions(
+                action_code="R",
+                id_role=current_user.id_role,
+                module_code=synthese_module.module_code,
+                object_code="ALL",
+            )
         sensitive, unsensitive = split_blurring_permissions(permissions=permissions)
 
         assert all(s.sensitivity_filter for s in sensitive)
@@ -717,11 +729,11 @@ class TestSyntheseBlurring:
     def test_synthese_blurring(self, users, synthese_module, synthese_read_permissions):
         current_user = users["self_user"]
         set_logged_user_cookie(self.client, current_user)
-        # None is 3 
+        # None is 3
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
         synthese_read_permissions(current_user, 2, sensitivity_filter=False)
-        
+
         url = url_for("gn_synthese.get_observations_for_web")
         r = self.client.get(url)
-        
+
         assert False
