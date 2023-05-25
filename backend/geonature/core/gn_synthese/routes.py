@@ -54,6 +54,7 @@ from geonature.core.gn_synthese.utils.query_select_sqla import SyntheseQuery
 from geonature.core.gn_permissions import decorators as permissions
 from geonature.core.gn_permissions.decorators import login_required, permissions_required
 from geonature.core.gn_permissions.tools import get_scopes_by_action, get_permissions
+from geonature.core.sensitivity.models import cor_sensitivity_area_type
 
 from ref_geo.models import LAreas, BibAreasTypes
 
