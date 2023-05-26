@@ -449,10 +449,15 @@ class Synthese(DB.Model):
     def _has_permissions_grant(self, permissions):
         if not permissions:
             return False
+        unloaded_objs = sa.inspect(self).unloaded
         for perm in permissions:
             if perm.has_other_filters_than("SCOPE", "SENSITIVITY"):
                 continue  # unsupported filters
-            if perm.sensitivity_filter and self.nomenclature_sensitivity.cd_nomenclature == "4":
+            if (
+                perm.sensitivity_filter
+                and "nomenclature_sensitivity" not in unloaded_objs
+                and self.nomenclature_sensitivity.cd_nomenclature == "4"
+            ):
                 continue
             if perm.scope_value:
                 if g.current_user == self.digitiser:
