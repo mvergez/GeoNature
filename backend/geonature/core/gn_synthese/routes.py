@@ -440,12 +440,15 @@ def get_one_synthese(permissions, id_synthese):
     if not synthese.has_instance_permission(permissions=permissions):
         raise Forbidden()
 
-    sensitivity, _ = split_blurring_permissions(permissions=permissions)
+    sensitivity, without_blurring_permissions = split_blurring_permissions(permissions=permissions)
 
     sensitivity = list(sensitivity)
 
     # If sensitivity permissions and obs sensitive. FIXME: HardCoded "0"?
-    if len(sensitivity) != 0 and synthese.nomenclature_sensitivity.cd_nomenclature != "0":
+    if (
+        not synthese.has_instance_permission(without_blurring_permissions)
+        and synthese.nomenclature_sensitivity.cd_nomenclature != "0"
+    ):
         # Use a cte to have the areas associated with the current id_synthese
         cte = select([CorAreaSynthese]).where(CorAreaSynthese.id_synthese == id_synthese).cte()
         # Blurred area of the observation
