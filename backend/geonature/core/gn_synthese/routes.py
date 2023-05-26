@@ -496,6 +496,7 @@ def get_one_synthese(permissions, id_synthese):
             # To populate Synthese.areas directly
             .options(contains_eager(Synthese.areas.of_type(BlurredAreas)))
             .filter(Synthese.id_synthese == id_synthese)
+            .order_by(BlurredAreaTypes.size_hierarchy)
         )
 
         # Use one here not first
