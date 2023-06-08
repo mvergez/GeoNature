@@ -172,7 +172,10 @@ def get_observations_for_web(permissions):
                 VSyntheseForWebApp.count_min != VSyntheseForWebApp.count_max,
                 func.concat(VSyntheseForWebApp.count_min, " - ", VSyntheseForWebApp.count_max),
             ),
-            (VSyntheseForWebApp.count_min != None, func.concat(VSyntheseForWebApp.count_min)),
+            (
+                VSyntheseForWebApp.count_min != None,
+                func.concat(VSyntheseForWebApp.count_min),
+            ),
         ],
         else_="",
     )
@@ -273,11 +276,9 @@ def get_observations_for_web(permissions):
     )
 
     query1 = unsensitive_area_query.query
-    query1 = query1.filter(
-        sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause)
-    ).limit(result_limit)
+    query1 = query1.filter(sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause))
     query2 = sensitive_area_query.query
-    query2 = query2.filter(sensitive_where_clause).limit(result_limit)
+    query2 = query2.filter(sensitive_where_clause)
 
     blurring_cte = query1.union(query2).cte("blurring")
 
@@ -285,23 +286,20 @@ def get_observations_for_web(permissions):
         # select([VSyntheseForWebApp.id_synthese, observations])
         select([observations])
         .distinct(
-            VSyntheseForWebApp.id_synthese, blurring_cte.c.priority, VSyntheseForWebApp.date_min
-        )
-        .select_from(
-            VSyntheseForWebApp.__table__.join(
-                blurring_cte,
-                blurring_cte.c.id_synthese == VSyntheseForWebApp.id_synthese,
-            )
+            VSyntheseForWebApp.id_synthese,
+            blurring_cte.c.priority,
+            VSyntheseForWebApp.date_min,
         )
         .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
         .order_by(VSyntheseForWebApp.date_min.desc(), blurring_cte.c.priority)
         .limit(result_limit)
     )
 
-    synthese_query_class = SyntheseQuery(
-        VSyntheseForWebApp,
-        obs_query,
-        filters,
+    synthese_query_class = SyntheseQuery(VSyntheseForWebApp, obs_query, filters)
+    synthese_query_class.add_join(
+        blurring_cte,
+        blurring_cte.c.id_synthese,
+        VSyntheseForWebApp.id_synthese,
     )
     synthese_query_class.filter_taxonomy()
     synthese_query_class.filter_other_filters(g.current_user)
