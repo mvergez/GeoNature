@@ -165,11 +165,9 @@ def build_cte(
     )
 
     query1 = unsensitive_area_query.query
-    query1 = query1.filter(
-        sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause)
-    ).limit(50000)
+    query1 = query1.filter(sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause))
     query2 = sensitive_area_query.query
-    query2 = query2.filter(sensitive_where_clause).limit(50000)
+    query2 = query2.filter(sensitive_where_clause)
 
     return query1.union(query2).cte("blurring")
 
