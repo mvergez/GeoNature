@@ -88,9 +88,9 @@ class RawGeometry(Geometry):
 
 
 def split_blurring_permissions(permissions):
-    return filter(lambda p: p.sensitivity_filter, permissions), filter(
-        lambda p: not p.sensitivity_filter, permissions
-    )
+    return [p for p in permissions if p.sensitivity_filter], [
+        p for p in permissions if not p.sensitivity_filter
+    ]
 
 
 def build_sensitive_area_filters(query, current_user, sensitive_permissions):
@@ -106,6 +106,98 @@ def build_sensitive_area_filters(query, current_user, sensitive_permissions):
     return sa.and_(
         where_clause, query.model.id_nomenclature_sensitivity.in_(sensitive_nomenc)
     ), sa.and_(query.model.id_nomenclature_sensitivity.notin_(sensitive_nomenc), where_clause)
+
+
+def compute_blurring_query():
+    # TODO: see if alias are required for synthese query here
+    # Build 2 queries that will be UNIONed
+    unsensitive_area_query = SyntheseQuery(
+        Synthese,
+        Synthese.query.with_entities(
+            sa.literal(1).label("priority"),
+            Synthese.id_synthese.label("id_synthese"),
+            # TODO:to remove, but only way to get a RawGeometry...
+            func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
+        )
+        .filter(Synthese.the_geom_4326.isnot(None))
+        .order_by(Synthese.date_min.desc()),
+        {},
+    )
+
+    sensitive_area_query = SyntheseQuery(
+        Synthese,
+        Synthese.query.with_entities(
+            sa.literal(2).label("priority"),
+            Synthese.id_synthese.label("id_synthese"),
+            LAreas.geom.st_transform(4326).label("geom"),
+        )
+        # .join(
+        #     TNomenclatures, TNomenclatures.id_nomenclature == Synthese.id_nomenclature_sensitivity
+        # )
+        .join(Synthese.areas)
+        .join(LAreas.area_type)
+        .join(
+            cor_sensitivity_area_type,
+            cor_sensitivity_area_type.c.id_area_type == BibAreasTypes.id_type,
+        )
+        .filter(
+            cor_sensitivity_area_type.c.id_nomenclature_sensitivity
+            == Synthese.id_nomenclature_sensitivity
+        )
+        .filter(Synthese.the_geom_4326.isnot(None))
+        .order_by(Synthese.date_min.desc()),
+        {},
+    )
+
+    return unsensitive_area_query, sensitive_area_query
+
+
+def build_cte(
+    sensitive_permissions, unsensitive_permissions, sensitive_area_query, unsensitive_area_query
+):
+    # Unsensitive
+    # Sensitive
+    sensitive_where_clause, unsensitive_where_clause = build_sensitive_area_filters(
+        sensitive_area_query, g.current_user, sensitive_permissions=sensitive_permissions
+    )
+    unsensitive_unsensitive_where_clause = unsensitive_area_query._filter_query_with_permissions(
+        g.current_user, unsensitive_permissions
+    )
+
+    query1 = unsensitive_area_query.query
+    query1 = query1.filter(
+        sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause)
+    ).limit(50000)
+    query2 = sensitive_area_query.query
+    query2 = query2.filter(sensitive_where_clause).limit(50000)
+
+    return query1.union(query2).cte("blurring")
+
+
+def build_synthese_obs_query(observations, blurring_cte, filters, limit):
+    obs_query = (
+        # select([VSyntheseForWebApp.id_synthese, observations])
+        select([observations])
+        .distinct(
+            VSyntheseForWebApp.id_synthese,
+            blurring_cte.c.priority,
+            VSyntheseForWebApp.date_min,
+        )
+        .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
+        .order_by(VSyntheseForWebApp.date_min.desc(), blurring_cte.c.priority)
+        .limit(limit)
+    )
+
+    synthese_query_class = SyntheseQuery(VSyntheseForWebApp, obs_query, filters)
+    synthese_query_class.add_join(
+        blurring_cte,
+        blurring_cte.c.id_synthese,
+        VSyntheseForWebApp.id_synthese,
+    )
+    synthese_query_class.filter_taxonomy()
+    synthese_query_class.filter_other_filters(g.current_user)
+    synthese_query_class.build_query()
+    return synthese_query_class.query
 
 
 @routes.route("/for_web", methods=["GET", "POST"])
@@ -210,101 +302,46 @@ def get_observations_for_web(permissions):
     ]
     observations = func.json_build_object(*columns).label("obs_as_json")
 
-    obs_query = (
-        # select([VSyntheseForWebApp.id_synthese, observations])
-        select([observations])
-        .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
-        .order_by(VSyntheseForWebApp.date_min.desc())
-        .limit(result_limit)
-    )
-
-    # Add filters to observations CTE query
-    synthese_query_class = SyntheseQuery(
-        VSyntheseForWebApp,
-        obs_query,
-        filters,
-    )
-    obs_query = synthese_query_class.query
-
-    # Build 2 queries that will be UNIONed
-    unsensitive_area_query = SyntheseQuery(
-        Synthese,
-        Synthese.query.with_entities(
-            sa.literal(1).label("priority"),
-            Synthese.id_synthese.label("id_synthese"),
-            func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
-        )
-        .filter(Synthese.the_geom_4326.isnot(None))
-        .order_by(Synthese.date_min.desc()),
-        {},
-    )
-    # TODO: careful on alias !!!!!!!
-    sensitive_area_query = SyntheseQuery(
-        Synthese,
-        Synthese.query.with_entities(
-            sa.literal(2).label("priority"),
-            Synthese.id_synthese.label("id_synthese"),
-            LAreas.geom.st_transform(4326).label("geom"),
-        )
-        # .join(
-        #     TNomenclatures, TNomenclatures.id_nomenclature == Synthese.id_nomenclature_sensitivity
-        # )
-        .join(Synthese.areas)
-        .join(LAreas.area_type)
-        .join(
-            cor_sensitivity_area_type,
-            cor_sensitivity_area_type.c.id_area_type == BibAreasTypes.id_type,
-        )
-        .filter(
-            cor_sensitivity_area_type.c.id_nomenclature_sensitivity
-            == Synthese.id_nomenclature_sensitivity
-        )
-        .filter(Synthese.the_geom_4326.isnot(None))
-        .order_by(Synthese.date_min.desc()),
-        {},
-    )
-
-    # PERMISSIONS
+    # Need to check if there are sensitive permissions
     sensitive, unsensitive = split_blurring_permissions(permissions)
-    # Unsensitive
-    # Sensitive
-    sensitive_where_clause, unsensitive_where_clause = build_sensitive_area_filters(
-        sensitive_area_query, g.current_user, sensitive_permissions=sensitive
-    )
-    unsensitive_unsensitive_where_clause = unsensitive_area_query._filter_query_with_permissions(
-        g.current_user, unsensitive
-    )
-
-    query1 = unsensitive_area_query.query
-    query1 = query1.filter(sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause))
-    query2 = sensitive_area_query.query
-    query2 = query2.filter(sensitive_where_clause)
-
-    blurring_cte = query1.union(query2).cte("blurring")
-
-    obs_query = (
-        # select([VSyntheseForWebApp.id_synthese, observations])
-        select([observations])
-        .distinct(
-            VSyntheseForWebApp.id_synthese,
-            blurring_cte.c.priority,
-            VSyntheseForWebApp.date_min,
+    has_no_sensitive_permissions = len(list(sensitive)) == 0
+    if has_no_sensitive_permissions:
+        # No need to apply blurring
+        obs_query = (
+            # select([VSyntheseForWebApp.id_synthese, observations])
+            select([observations])
+            .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
+            .order_by(VSyntheseForWebApp.date_min.desc())
+            .limit(result_limit)
         )
-        .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
-        .order_by(VSyntheseForWebApp.date_min.desc(), blurring_cte.c.priority)
-        .limit(result_limit)
-    )
 
-    synthese_query_class = SyntheseQuery(VSyntheseForWebApp, obs_query, filters)
-    synthese_query_class.add_join(
-        blurring_cte,
-        blurring_cte.c.id_synthese,
-        VSyntheseForWebApp.id_synthese,
-    )
-    synthese_query_class.filter_taxonomy()
-    synthese_query_class.filter_other_filters(g.current_user)
-    synthese_query_class.build_query()
-    obs_query = synthese_query_class.query
+        # Add filters to observations CTE query
+        synthese_query_class = SyntheseQuery(
+            VSyntheseForWebApp,
+            obs_query,
+            filters,
+        )
+        synthese_query_class.apply_all_filters(g.current_user, permissions)
+        obs_query = synthese_query_class.query
+        geojson_column = VSyntheseForWebApp.st_asgeojson
+    else:
+        # Build 2 queries that will be UNIONed
+        unsensitive_area_query, sensitive_area_query = compute_blurring_query()
+
+        blurring_cte = build_cte(
+            sensitive_permissions=sensitive,
+            unsensitive_permissions=unsensitive,
+            sensitive_area_query=sensitive_area_query,
+            unsensitive_area_query=unsensitive_area_query,
+        )
+
+        obs_query = build_synthese_obs_query(
+            observations=observations,
+            blurring_cte=blurring_cte,
+            filters=filters,
+            limit=result_limit,
+        )
+        geojson_column = func.st_asgeojson(blurring_cte.c.geom)
 
     # TODO: distinct on id_synthese !!!!!
 
@@ -341,12 +378,7 @@ def get_observations_for_web(permissions):
         )
     else:
         # SQLAlchemy 1.4: replace column by add_columns
-        # obs_query = obs_query.column(VSyntheseForWebApp.st_asgeojson.label("geojson")).cte(
-        #     "OBSERVATIONS"
-        # )
-        obs_query = obs_query.column(func.st_asgeojson(blurring_cte.c.geom).label("geojson")).cte(
-            "OBSERVATIONS"
-        )
+        obs_query = obs_query.column(geojson_column.label("geojson")).cte("OBSERVATIONS")
 
     if output_format == "ungrouped_geom":
         query = select([obs_query.c.geojson, obs_query.c.obs_as_json])
