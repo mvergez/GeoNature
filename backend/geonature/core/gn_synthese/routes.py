@@ -108,52 +108,69 @@ def build_sensitive_area_filters(query, current_user, sensitive_permissions):
     ), sa.and_(query.model.id_nomenclature_sensitivity.notin_(sensitive_nomenc), where_clause)
 
 
-def compute_blurring_query():
+def compute_blurring_query(filters):
     # TODO: see if alias are required for synthese query here
     # Build 2 queries that will be UNIONed
+    # SyntheseUnSensAlias = aliased(Synthese)
     unsensitive_area_query = SyntheseQuery(
         Synthese,
-        Synthese.query.with_entities(
-            sa.literal(1).label("priority"),
-            Synthese.id_synthese.label("id_synthese"),
-            # TODO:to remove, but only way to get a RawGeometry...
-            func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
+        select(
+            [
+                sa.literal(1).label("priority"),
+                Synthese.id_synthese.label("id_synthese"),
+                func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
+            ]
         )
-        .filter(Synthese.the_geom_4326.isnot(None))
+        .select_from(Synthese)
+        .where(Synthese.the_geom_4326.isnot(None))
         .order_by(Synthese.date_min.desc()),
-        {},
+        filters=filters,
     )
+    unsensitive_area_query.filter_taxonomy()
+    unsensitive_area_query.filter_other_filters(g.current_user)
+    unsensitive_area_query.build_query()
 
+    SyntheseAlias = aliased(Synthese)
     sensitive_area_query = SyntheseQuery(
-        Synthese,
-        Synthese.query.with_entities(
-            sa.literal(2).label("priority"),
-            Synthese.id_synthese.label("id_synthese"),
-            LAreas.geom.st_transform(4326).label("geom"),
+        SyntheseAlias,
+        select(
+            [
+                sa.literal(2).label("priority"),
+                SyntheseAlias.id_synthese.label("id_synthese"),
+                LAreas.geom.st_transform(4326).label("geom"),
+            ]
         )
-        # .join(
-        #     TNomenclatures, TNomenclatures.id_nomenclature == Synthese.id_nomenclature_sensitivity
-        # )
-        .join(Synthese.areas)
-        .join(LAreas.area_type)
-        .join(
-            cor_sensitivity_area_type,
-            cor_sensitivity_area_type.c.id_area_type == BibAreasTypes.id_type,
-        )
-        .filter(
+        .where(
             cor_sensitivity_area_type.c.id_nomenclature_sensitivity
-            == Synthese.id_nomenclature_sensitivity
+            == SyntheseAlias.id_nomenclature_sensitivity
         )
-        .filter(Synthese.the_geom_4326.isnot(None))
-        .order_by(Synthese.date_min.desc()),
-        {},
+        .where(SyntheseAlias.the_geom_4326.isnot(None))
+        .order_by(SyntheseAlias.date_min.desc()),
+        filters=filters,
     )
+    sensitive_area_query.add_join(
+        CorAreaSynthese, CorAreaSynthese.id_synthese, SyntheseAlias.id_synthese
+    )
+    sensitive_area_query.add_join(LAreas, LAreas.id_area, CorAreaSynthese.id_area)
+    sensitive_area_query.add_join(BibAreasTypes, BibAreasTypes.id_type, LAreas.id_type)
+    sensitive_area_query.add_join(
+        cor_sensitivity_area_type,
+        cor_sensitivity_area_type.c.id_area_type,
+        BibAreasTypes.id_type,
+    )
+    sensitive_area_query.filter_taxonomy()
+    sensitive_area_query.filter_other_filters(g.current_user)
+    sensitive_area_query.build_query()
 
     return unsensitive_area_query, sensitive_area_query
 
 
 def build_cte(
-    sensitive_permissions, unsensitive_permissions, sensitive_area_query, unsensitive_area_query
+    sensitive_permissions,
+    unsensitive_permissions,
+    sensitive_area_query,
+    unsensitive_area_query,
+    limit,
 ):
     # Unsensitive
     # Sensitive
@@ -165,9 +182,11 @@ def build_cte(
     )
 
     query1 = unsensitive_area_query.query
-    query1 = query1.filter(sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause))
+    query1 = query1.where(
+        sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause)
+    ).limit(limit)
     query2 = sensitive_area_query.query
-    query2 = query2.filter(sensitive_where_clause)
+    query2 = query2.where(sensitive_where_clause).limit(limit)
 
     return query1.union(query2).cte("blurring")
 
@@ -192,9 +211,9 @@ def build_synthese_obs_query(observations, blurring_cte, filters, limit):
         blurring_cte.c.id_synthese,
         VSyntheseForWebApp.id_synthese,
     )
-    synthese_query_class.filter_taxonomy()
-    synthese_query_class.filter_other_filters(g.current_user)
-    synthese_query_class.build_query()
+    # synthese_query_class.filter_taxonomy()
+    # synthese_query_class.filter_other_filters(g.current_user)
+    # synthese_query_class.build_query()
     return synthese_query_class.query
 
 
@@ -324,13 +343,14 @@ def get_observations_for_web(permissions):
         geojson_column = VSyntheseForWebApp.st_asgeojson
     else:
         # Build 2 queries that will be UNIONed
-        unsensitive_area_query, sensitive_area_query = compute_blurring_query()
+        unsensitive_area_query, sensitive_area_query = compute_blurring_query(filters)
 
         blurring_cte = build_cte(
             sensitive_permissions=sensitive,
             unsensitive_permissions=unsensitive,
             sensitive_area_query=sensitive_area_query,
             unsensitive_area_query=unsensitive_area_query,
+            limit=result_limit,
         )
 
         obs_query = build_synthese_obs_query(
@@ -386,10 +406,15 @@ def get_observations_for_web(permissions):
             "observations", func.json_agg(obs_query.c.obs_as_json).label("observations")
         )
         query = select([obs_query.c.geojson, grouped_properties]).group_by(obs_query.c.geojson)
+    from sqlalchemy.dialects import postgresql
+
+    print(
+        str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        .replace("\n", "")
+        .replace("\\", "")
+    )
 
     results = DB.session.execute(query)
-    # from sqlalchemy.dialects import postgresql
-    # print(str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})).replace('\n', '').replace('\\', ''))
     # Build final GeoJson
     geojson_features = []
     for geom_as_geojson, properties in results:
