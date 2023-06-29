@@ -121,36 +121,41 @@ def compute_blurring_query(filters):
                 func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
             ]
         )
-        .select_from(Synthese)
         .where(Synthese.the_geom_4326.isnot(None))
         .order_by(Synthese.date_min.desc()),
-        filters=filters,
+        filters=dict(filters),  # not to edit the actual filter object
     )
     unsensitive_area_query.filter_taxonomy()
     unsensitive_area_query.filter_other_filters(g.current_user)
     unsensitive_area_query.build_query()
 
-    SyntheseAlias = aliased(Synthese)
+    # SyntheseAlias = aliased(Synthese)
+    geom = LAreas.geom.st_transform(4326).label("geom")
     sensitive_area_query = SyntheseQuery(
-        SyntheseAlias,
+        Synthese,
         select(
             [
                 sa.literal(2).label("priority"),
-                SyntheseAlias.id_synthese.label("id_synthese"),
-                LAreas.geom.st_transform(4326).label("geom"),
+                Synthese.id_synthese.label("id_synthese"),
+                geom,
             ]
         )
         .where(
             cor_sensitivity_area_type.c.id_nomenclature_sensitivity
-            == SyntheseAlias.id_nomenclature_sensitivity
+            == Synthese.id_nomenclature_sensitivity
         )
-        .where(SyntheseAlias.the_geom_4326.isnot(None))
-        .order_by(SyntheseAlias.date_min.desc()),
-        filters=filters,
+        .where(Synthese.the_geom_4326.isnot(None))
+        .order_by(Synthese.date_min.desc()),
+        filters=dict(filters),
+        query_joins=sa.join(
+            Synthese,
+            CorAreaSynthese,
+            CorAreaSynthese.id_synthese == Synthese.id_synthese,
+        ),
     )
-    sensitive_area_query.add_join(
-        CorAreaSynthese, CorAreaSynthese.id_synthese, SyntheseAlias.id_synthese
-    )
+    # sensitive_area_query.add_join(
+    #     CorAreaSynthese, CorAreaSynthese.id_synthese, SyntheseAlias.id_synthese
+    # )
     sensitive_area_query.add_join(LAreas, LAreas.id_area, CorAreaSynthese.id_area)
     sensitive_area_query.add_join(BibAreasTypes, BibAreasTypes.id_type, LAreas.id_type)
     sensitive_area_query.add_join(
@@ -160,6 +165,7 @@ def compute_blurring_query(filters):
     )
     sensitive_area_query.filter_taxonomy()
     sensitive_area_query.filter_other_filters(g.current_user)
+    print(sensitive_area_query.query_joins)
     sensitive_area_query.build_query()
 
     return unsensitive_area_query, sensitive_area_query
@@ -213,7 +219,7 @@ def build_synthese_obs_query(observations, blurring_cte, filters, limit):
     )
     # synthese_query_class.filter_taxonomy()
     # synthese_query_class.filter_other_filters(g.current_user)
-    # synthese_query_class.build_query()
+    synthese_query_class.build_query()
     return synthese_query_class.query
 
 
@@ -336,8 +342,9 @@ def get_observations_for_web(permissions):
         synthese_query_class = SyntheseQuery(
             VSyntheseForWebApp,
             obs_query,
-            filters,
+            dict(filters),
         )
+        print(permissions)
         synthese_query_class.apply_all_filters(g.current_user, permissions)
         obs_query = synthese_query_class.query
         geojson_column = VSyntheseForWebApp.st_asgeojson
