@@ -165,7 +165,6 @@ def compute_blurring_query(filters):
     )
     sensitive_area_query.filter_taxonomy()
     sensitive_area_query.filter_other_filters(g.current_user)
-    print(sensitive_area_query.query_joins)
     sensitive_area_query.build_query()
 
     return unsensitive_area_query, sensitive_area_query
@@ -344,7 +343,6 @@ def get_observations_for_web(permissions):
             obs_query,
             dict(filters),
         )
-        print(permissions)
         synthese_query_class.apply_all_filters(g.current_user, permissions)
         obs_query = synthese_query_class.query
         geojson_column = VSyntheseForWebApp.st_asgeojson
