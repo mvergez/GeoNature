@@ -200,13 +200,9 @@ def build_synthese_obs_query(observations, blurring_cte, filters, limit):
     obs_query = (
         # select([VSyntheseForWebApp.id_synthese, observations])
         select([observations])
-        .distinct(
-            VSyntheseForWebApp.id_synthese,
-            blurring_cte.c.priority,
-            VSyntheseForWebApp.date_min,
-        )
+        .distinct(VSyntheseForWebApp.id_synthese)
         .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
-        .order_by(VSyntheseForWebApp.date_min.desc(), blurring_cte.c.priority)
+        .order_by(VSyntheseForWebApp.id_synthese, blurring_cte.c.priority)
         .limit(limit)
     )
 
@@ -326,8 +322,13 @@ def get_observations_for_web(permissions):
     ]
     observations = func.json_build_object(*columns).label("obs_as_json")
 
-    geo_intersection_filter = {"geoIntersection": filters.pop("geoIntersection", {})}
-
+    # Need to pop out geoIntersection to put the filter AFTER the blurring cte
+    # So the filter applies to the final geometry, not the precise point or the
+    # blurred geometry. Only on the final geom
+    geo_intersection_value = filters.pop("geoIntersection", None)
+    geo_intersection_filter = (
+        {"geoIntersection": geo_intersection_value} if geo_intersection_value else {}
+    )
     # Need to check if there are sensitive permissions
     sensitive, unsensitive = split_blurring_permissions(permissions)
     has_no_sensitive_permissions = len(list(sensitive)) == 0
