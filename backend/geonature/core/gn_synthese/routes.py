@@ -210,14 +210,16 @@ def build_synthese_obs_query(observations, blurring_cte, filters, limit):
         .limit(limit)
     )
 
-    synthese_query_class = SyntheseQuery(VSyntheseForWebApp, obs_query, filters)
+    synthese_query_class = SyntheseQuery(
+        VSyntheseForWebApp, obs_query, filters, geom_column=blurring_cte.c.geom
+    )
     synthese_query_class.add_join(
         blurring_cte,
         blurring_cte.c.id_synthese,
         VSyntheseForWebApp.id_synthese,
     )
     # synthese_query_class.filter_taxonomy()
-    # synthese_query_class.filter_other_filters(g.current_user)
+    synthese_query_class.filter_other_filters(g.current_user)
     synthese_query_class.build_query()
     return synthese_query_class.query
 
@@ -324,6 +326,8 @@ def get_observations_for_web(permissions):
     ]
     observations = func.json_build_object(*columns).label("obs_as_json")
 
+    geo_intersection_filter = {"geoIntersection": filters.pop("geoIntersection", {})}
+
     # Need to check if there are sensitive permissions
     sensitive, unsensitive = split_blurring_permissions(permissions)
     has_no_sensitive_permissions = len(list(sensitive)) == 0
@@ -361,7 +365,7 @@ def get_observations_for_web(permissions):
         obs_query = build_synthese_obs_query(
             observations=observations,
             blurring_cte=blurring_cte,
-            filters=filters,
+            filters=geo_intersection_filter,
             limit=result_limit,
         )
         geojson_column = func.st_asgeojson(blurring_cte.c.geom)
