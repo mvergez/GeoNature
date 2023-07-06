@@ -122,7 +122,7 @@ def compute_blurring_query(filters):
             ]
         )
         .where(Synthese.the_geom_4326.isnot(None))
-        .order_by(Synthese.date_min.desc()),
+        .order_by(Synthese.id_synthese.desc()),
         filters=dict(filters),  # not to edit the actual filter object
     )
     unsensitive_area_query.filter_taxonomy()
@@ -130,6 +130,7 @@ def compute_blurring_query(filters):
     unsensitive_area_query.build_query()
 
     # SyntheseAlias = aliased(Synthese)
+    CorAreaSyntheseAlias = aliased(CorAreaSynthese)
     geom = LAreas.geom.st_transform(4326).label("geom")
     sensitive_area_query = SyntheseQuery(
         Synthese,
@@ -145,18 +146,18 @@ def compute_blurring_query(filters):
             == Synthese.id_nomenclature_sensitivity
         )
         .where(Synthese.the_geom_4326.isnot(None))
-        .order_by(Synthese.date_min.desc()),
+        .order_by(Synthese.id_synthese.desc()),
         filters=dict(filters),
         query_joins=sa.join(
             Synthese,
-            CorAreaSynthese,
-            CorAreaSynthese.id_synthese == Synthese.id_synthese,
+            CorAreaSyntheseAlias,
+            CorAreaSyntheseAlias.id_synthese == Synthese.id_synthese,
         ),
     )
     # sensitive_area_query.add_join(
     #     CorAreaSynthese, CorAreaSynthese.id_synthese, SyntheseAlias.id_synthese
     # )
-    sensitive_area_query.add_join(LAreas, LAreas.id_area, CorAreaSynthese.id_area)
+    sensitive_area_query.add_join(LAreas, LAreas.id_area, CorAreaSyntheseAlias.id_area)
     sensitive_area_query.add_join(BibAreasTypes, BibAreasTypes.id_type, LAreas.id_type)
     sensitive_area_query.add_join(
         cor_sensitivity_area_type,
@@ -418,11 +419,11 @@ def get_observations_for_web(permissions):
         query = select([obs_query.c.geojson, grouped_properties]).group_by(obs_query.c.geojson)
     from sqlalchemy.dialects import postgresql
 
-    print(
-        str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
-        .replace("\n", "")
-        .replace("\\", "")
-    )
+    # print(
+    #     str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    #     .replace("\n", "")
+    #     .replace("\\", "")
+    # )
 
     results = DB.session.execute(query)
     # Build final GeoJson
