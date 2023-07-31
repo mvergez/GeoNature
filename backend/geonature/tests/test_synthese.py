@@ -1282,14 +1282,24 @@ class TestSyntheseBlurring:
         assert all(s.sensitivity_filter for s in sensitive)
         assert all(not s.sensitivity_filter for s in unsensitive)
 
-    def test_synthese_blurring(self, users, synthese_module, synthese_read_permissions):
-        current_user = users["self_user"]
-        set_logged_user_cookie(self.client, current_user)
+    def test_synthese_blurring(
+        self, users, synthese_sensitive_data, source, synthese_read_permissions
+    ):
+        current_user = users["stranger_user"]
         # None is 3
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
-        synthese_read_permissions(current_user, 2, sensitivity_filter=False)
+        synthese_read_permissions(current_user, 1, sensitivity_filter=False)
 
+        set_logged_user_cookie(self.client, current_user)
         url = url_for("gn_synthese.get_observations_for_web")
-        r = self.client.get(url)
+
+        response = self.client.post(url, json={"id_source": source.id_source})
 
         assert False
+        # id_synthese = {
+        #     feature["properties"]["id_synthese"] for feature in response.json["features"]
+        # }
+        # expected_id_synthese = {
+        #     synthese.id_synthese for name, synthese in synthese_sensitive_data.items()
+        #     if name in ["obs_sensitive_protected","obs_protected_not_sensitive"]
+        # }
