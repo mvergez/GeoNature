@@ -350,7 +350,7 @@ def get_observations_for_web(permissions):
             dict(filters),
         )
         synthese_query_class.apply_all_filters(g.current_user, permissions)
-        obs_query = synthese_query_class.query
+        obs_query = synthese_query_class.build_query()
         geojson_column = VSyntheseForWebApp.st_asgeojson
     else:
         # Build 2 queries that will be UNIONed
