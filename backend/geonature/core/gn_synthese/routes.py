@@ -326,7 +326,7 @@ def get_observations_for_web(permissions):
     # Need to pop out geoIntersection to put the filter AFTER the blurring cte
     # So the filter applies to the final geometry, not the precise point or the
     # blurred geometry. Only on the final geom
-    geo_intersection_value = filters.pop("geoIntersection", None)
+    geo_intersection_value = filters.get("geoIntersection", None)
     geo_intersection_filter = (
         {"geoIntersection": geo_intersection_value} if geo_intersection_value else {}
     )
@@ -419,11 +419,11 @@ def get_observations_for_web(permissions):
         query = select([obs_query.c.geojson, grouped_properties]).group_by(obs_query.c.geojson)
     from sqlalchemy.dialects import postgresql
 
-    # print(
-    #     str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
-    #     .replace("\n", "")
-    #     .replace("\\", "")
-    # )
+    print(
+        str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        .replace("\n", "")
+        .replace("\\", "")
+    )
 
     results = DB.session.execute(query)
     # Build final GeoJson
