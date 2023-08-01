@@ -557,17 +557,23 @@ def synthese_sensitive_data(app, users, datasets, source):
         TNomenclatures.query.filter(
             TNomenclatures.nomenclature_type.has(BibNomenclaturesTypes.mnemonique == "SENSIBILITE")
         )
-        .filter(TNomenclatures.cd_nomenclature == "4")
+        .filter(TNomenclatures.cd_nomenclature == "0")
         .one()
     ).id_nomenclature
-    Synthese.query.filter(
-        Synthese.cd_nom == sensitive_protected_cd_nom
-    ).first().id_nomenclature_sensitivity != id_nomenclature_not_sensitive
+    assert (
+        Synthese.query.filter(Synthese.cd_nom == sensitive_protected_cd_nom)
+        .first()
+        .id_nomenclature_sensitivity
+        != id_nomenclature_not_sensitive
+    )
 
     # Assert that obs_protected_not_sensitive is not a sensitive observation
-    Synthese.query.filter(
-        Synthese.cd_nom == protected_not_sensitive_cd_nom
-    ).first().id_nomenclature_sensitivity == id_nomenclature_not_sensitive
+    assert (
+        Synthese.query.filter(Synthese.cd_nom == protected_not_sensitive_cd_nom)
+        .first()
+        .id_nomenclature_sensitivity
+        == id_nomenclature_not_sensitive
+    )
 
     ## Assert that obs_sensitive_protected and obs_protected_not_sensitive are protected observation
     def assert_observation_is_protected(name_observation):
