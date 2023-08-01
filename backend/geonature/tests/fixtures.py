@@ -461,6 +461,7 @@ def synthese_sensitive_data(app, users, datasets, source):
                 cte_taxa_area_with_status.c.id_area == cte_taxa_area_with_sensitivity.c.id_area,
             ),
         )
+        .order_by(cte_taxa_area_with_status.c.cd_nom)
         .first()
     )
     sensitivity_rule = SensitivityRule.query.filter(
