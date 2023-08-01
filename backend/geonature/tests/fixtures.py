@@ -553,25 +553,35 @@ def synthese_sensitive_data(app, users, datasets, source):
             data[name] = s
 
     # Assert that obs_sensitive_protected is a sensitive observation
-    id_nomenclature_not_sensitive = (
+    nomenclature_not_sensitive = (
         TNomenclatures.query.filter(
             TNomenclatures.nomenclature_type.has(BibNomenclaturesTypes.mnemonique == "SENSIBILITE")
         )
         .filter(TNomenclatures.cd_nomenclature == "0")
         .one()
-    ).id_nomenclature
+    )
     assert (
-        Synthese.query.filter(
-            Synthese.id_synthese.in_(
-                (
-                    data[key].id_synthese
-                    for key in ["obs_sensitive_protected", "obs_sensitive_protected_2"]
-                )
+        nomenclature_not_sensitive.mnemonique == "Non sensible - Diffusion précise",
+        nomenclature_not_sensitive.mnemonique,
+    )
+    id_nomenclature_not_sensitive = nomenclature_not_sensitive.id_nomenclature
+
+    synthese_to_assert = Synthese.query.filter(
+        Synthese.id_synthese.in_(
+            (
+                data[key].id_synthese
+                for key in ["obs_sensitive_protected", "obs_sensitive_protected_2"]
             )
         )
-        .first()
-        .id_nomenclature_sensitivity
-        != id_nomenclature_not_sensitive
+    ).first()
+
+    assert (
+        synthese_to_assert.id_nomenclature_sensitivity != id_nomenclature_not_sensitive,
+        (
+            f"cd_nom: {synthese_to_assert.cd_nom}, id_nomenclature_bio_status: {synthese_to_assert.id_nomenclature_bio_status}, "
+            f"id_nomenclature_behaviour: {synthese_to_assert}.id_nomenclature_behaviour, "
+            f"geojson: {synthese_to_assert.the_geom_4326_geojson}"
+        ),
     )
 
     # Assert that obs_protected_not_sensitive is not a sensitive observation
