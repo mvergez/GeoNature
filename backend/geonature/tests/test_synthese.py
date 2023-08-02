@@ -1282,6 +1282,7 @@ def assert_unsensitive_synthese(json_synthese, synthese_from_db):
 
 
 def assert_sensitive_synthese(json_synthese, synthese_from_db):
+    print(synthese_from_db.id_nomenclature_sensitivity)
     id_type_area = (
         db.session.query(cor_sensitivity_area_type.c.id_area_type)
         .filter(
