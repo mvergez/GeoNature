@@ -1265,6 +1265,40 @@ def synthese_read_permissions(synthese_module):
     return _synthese_read_permissions
 
 
+def get_one_synthese_reponse_from_id(response: dict, id_synthese: int):
+    return [
+        synthese
+        for synthese in response["features"]
+        if synthese["properties"]["id"] == id_synthese
+    ][0]
+
+
+def assert_unsensitive_synthese(json_synthese, synthese_from_db):
+    # Need to pass through a Feature because rounding of coordinates is done
+    assert (
+        Feature(geometry=json.loads(synthese_from_db.the_geom_4326_geojson)).geometry
+        == json_synthese["geometry"]
+    )
+
+
+def assert_sensitive_synthese(json_synthese, synthese_from_db):
+    id_type_area = (
+        db.session.query(cor_sensitivity_area_type.c.id_area_type)
+        .filter(
+            cor_sensitivity_area_type.c.id_nomenclature_sensitivity
+            == synthese_from_db.id_nomenclature_sensitivity
+        )
+        .one()
+    )[0]
+
+    sensitive_area = [area for area in synthese_from_db.areas if area.id_type == id_type_area][0]
+
+    assert (
+        Feature(geometry=json.loads(sensitive_area.geojson_4326)).geometry
+        == json_synthese["geometry"]
+    )
+
+
 @pytest.mark.usefixtures("client_class", "temporary_transaction")
 class TestSyntheseBlurring:
     def test_split_blurring_permissions(
@@ -1284,16 +1318,9 @@ class TestSyntheseBlurring:
         assert all(s.sensitivity_filter for s in sensitive)
         assert all(not s.sensitivity_filter for s in unsensitive)
 
-    def test_synthese_blurring(
+    def test_get_observations_for_web_blurring(
         self, users, synthese_sensitive_data, source, synthese_read_permissions
     ):
-        def get_one_synthese_reponse_from_id(response: dict, id_synthese: int):
-            return [
-                synthese
-                for synthese in response["features"]
-                if synthese["properties"]["id"] == id_synthese
-            ][0]
-
         current_user = users["stranger_user"]
         # None is 3
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
@@ -1311,9 +1338,8 @@ class TestSyntheseBlurring:
         )
 
         # Need to pass through a Feature because rounding of coordinates is done
-        assert (
-            Feature(geometry=json.loads(unsensitive_synthese.the_geom_4326_geojson)).geometry
-            == unsensitive_synthese_from_response["geometry"]
+        assert_unsensitive_synthese(
+            json_synthese=unsensitive_synthese_from_response, synthese_from_db=unsensitive_synthese
         )
 
         # Check sensitive synthese obs geometry
@@ -1322,20 +1348,42 @@ class TestSyntheseBlurring:
             response_json, sensitive_synthese.id_synthese
         )
 
-        id_type_area = (
-            db.session.query(cor_sensitivity_area_type.c.id_area_type)
-            .filter(
-                cor_sensitivity_area_type.c.id_nomenclature_sensitivity
-                == sensitive_synthese.id_nomenclature_sensitivity
-            )
-            .one()
-        )[0]
+        assert_sensitive_synthese(
+            json_synthese=sensitive_synthese_from_response, synthese_from_db=sensitive_synthese
+        )
 
-        sensitive_area = [
-            area for area in sensitive_synthese.areas if area.id_type == id_type_area
-        ][0]
+    def test_get_one_synthese_sensitive(
+        self, users, synthese_sensitive_data, synthese_read_permissions
+    ):
+        current_user = users["stranger_user"]
+        sensitive_synthese = synthese_sensitive_data["obs_sensitive_protected"]
+        # None is 3
+        synthese_read_permissions(current_user, None, sensitivity_filter=True)
+        synthese_read_permissions(current_user, 1, sensitivity_filter=False)
 
-        assert (
-            Feature(geometry=json.loads(sensitive_area.geojson_4326)).geometry
-            == sensitive_synthese_from_response["geometry"]
+        set_logged_user_cookie(self.client, current_user)
+        url = url_for("gn_synthese.get_one_synthese", id_synthese=sensitive_synthese.id_synthese)
+
+        response_json = self.client.get(url).json
+
+        sensitive_synthese = synthese_sensitive_data["obs_sensitive_protected"]
+
+        assert_sensitive_synthese(json_synthese=response_json, synthese_from_db=sensitive_synthese)
+
+    def test_get_one_synthese_unsensitive(
+        self, users, synthese_sensitive_data, synthese_read_permissions
+    ):
+        current_user = users["stranger_user"]
+        unsensitive_synthese = synthese_sensitive_data["obs_protected_not_sensitive"]
+        # None is 3
+        synthese_read_permissions(current_user, None, sensitivity_filter=True)
+        synthese_read_permissions(current_user, 1, sensitivity_filter=False)
+
+        set_logged_user_cookie(self.client, current_user)
+        url = url_for("gn_synthese.get_one_synthese", id_synthese=unsensitive_synthese.id_synthese)
+
+        response_json = self.client.get(url).json
+
+        assert_unsensitive_synthese(
+            json_synthese=response_json, synthese_from_db=unsensitive_synthese
         )
