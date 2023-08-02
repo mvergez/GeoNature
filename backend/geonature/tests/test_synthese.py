@@ -9,6 +9,7 @@ from sqlalchemy import func
 from werkzeug.exceptions import Forbidden, BadRequest, Unauthorized
 from jsonschema import validate as validate_json
 from geoalchemy2.shape import to_shape, from_shape
+from geojson import Feature
 from shapely.geometry import Point
 
 from geonature.utils.env import db
@@ -18,6 +19,7 @@ from geonature.core.gn_synthese.routes import split_blurring_permissions
 from geonature.core.gn_commons.models.base import TModules
 from geonature.core.gn_permissions.models import PermAction, Permission
 from geonature.core.gn_permissions.tools import get_permissions
+from geonature.core.sensitivity.models import cor_sensitivity_area_type
 
 from pypnusershub.tests.utils import logged_user_headers, set_logged_user
 from ref_geo.models import BibAreasTypes, LAreas
@@ -1285,6 +1287,13 @@ class TestSyntheseBlurring:
     def test_synthese_blurring(
         self, users, synthese_sensitive_data, source, synthese_read_permissions
     ):
+        def get_one_synthese_reponse_from_id(response: dict, id_synthese: int):
+            return [
+                synthese
+                for synthese in response["features"]
+                if synthese["properties"]["id"] == id_synthese
+            ][0]
+
         current_user = users["stranger_user"]
         # None is 3
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
@@ -1293,13 +1302,40 @@ class TestSyntheseBlurring:
         set_logged_user_cookie(self.client, current_user)
         url = url_for("gn_synthese.get_observations_for_web")
 
-        response = self.client.post(url, json={"id_source": source.id_source})
+        response_json = self.client.post(url, json={"id_source": source.id_source}).json
 
-        assert False
-        # id_synthese = {
-        #     feature["properties"]["id_synthese"] for feature in response.json["features"]
-        # }
-        # expected_id_synthese = {
-        #     synthese.id_synthese for name, synthese in synthese_sensitive_data.items()
-        #     if name in ["obs_sensitive_protected","obs_protected_not_sensitive"]
-        # }
+        # Check unsensitive synthese obs geometry
+        unsensitive_synthese = synthese_sensitive_data["obs_protected_not_sensitive"]
+        unsensitive_synthese_from_response = get_one_synthese_reponse_from_id(
+            response_json, unsensitive_synthese.id_synthese
+        )
+
+        # Need to pass through a Feature because rounding of coordinates is done
+        assert (
+            Feature(geometry=json.loads(unsensitive_synthese.the_geom_4326_geojson)).geometry
+            == unsensitive_synthese_from_response["geometry"]
+        )
+
+        # Check sensitive synthese obs geometry
+        sensitive_synthese = synthese_sensitive_data["obs_sensitive_protected"]
+        sensitive_synthese_from_response = get_one_synthese_reponse_from_id(
+            response_json, sensitive_synthese.id_synthese
+        )
+
+        id_type_area = (
+            db.session.query(cor_sensitivity_area_type.c.id_area_type)
+            .filter(
+                cor_sensitivity_area_type.c.id_nomenclature_sensitivity
+                == sensitive_synthese.id_nomenclature_sensitivity
+            )
+            .one()
+        )[0]
+
+        sensitive_area = [
+            area for area in sensitive_synthese.areas if area.id_type == id_type_area
+        ][0]
+
+        assert (
+            Feature(geometry=json.loads(sensitive_area.geojson_4326)).geometry
+            == sensitive_synthese_from_response["geometry"]
+        )
