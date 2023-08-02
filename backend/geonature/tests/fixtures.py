@@ -552,7 +552,8 @@ def synthese_sensitive_data(app, users, datasets, source):
             )
             db.session.add(s)
             data[name] = s
-
+    for orm_objects in data.values():
+        db.session.refresh(orm_objects)
     # Assert that obs_sensitive_protected is a sensitive observation
     nomenclature_not_sensitive = (
         TNomenclatures.query.filter(
