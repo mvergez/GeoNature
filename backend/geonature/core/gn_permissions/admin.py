@@ -563,16 +563,16 @@ admin.add_view(
     )
 )
 
-
-admin.add_view(
-    ObjectAdmin(
-        PermObject,
-        db.session,
-        name="Objets",
-        category="Permissions",
-        endpoint="permissions/object",
-    )
-)
+# Retirer pour plus de lisibilité de l'interface des permissions
+# admin.add_view(
+#     ObjectAdmin(
+#         PermObject,
+#         db.session,
+#         name="Objets",
+#         category="Permissions",
+#         endpoint="permissions/object",
+#     )
+# )
 
 
 admin.add_view(
@@ -585,13 +585,13 @@ admin.add_view(
     )
 )
 
-
-admin.add_view(
-    PermissionAvailableAdmin(
-        PermissionAvailable,
-        db.session,
-        name="Permissions disponibles",
-        category="Permissions",
-        endpoint="permissions/availablepermission",
-    )
-)
+# Retirer pour plus de lisibilité de l'interface des permissions
+# admin.add_view(
+#     PermissionAvailableAdmin(
+#         PermissionAvailable,
+#         db.session,
+#         name="Permissions disponibles",
+#         category="Permissions",
+#         endpoint="permissions/availablepermission",
+#     )
+# )
