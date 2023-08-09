@@ -684,6 +684,8 @@ def export_observations_web(permissions):
     has_no_sensitive_permissions = len(list(sensitive)) == 0
 
     # Get the view for export
+    # Useful to have geom column so that they can be replaced by blurred geoms
+    # (only if the user has sensitive permissions)
     export_view = GenericTableGeo(
         tableName="v_synthese_for_export",
         schemaName="gn_synthese",
@@ -692,7 +694,6 @@ def export_observations_web(permissions):
         srid=srid,
     )
 
-    # TODO: faire une vue SQL pour exporter les obs sensibles
     if has_no_sensitive_permissions:
         # Get the CTE for synthese filtered by user permissions
         synthese_query_class = SyntheseQuery(
@@ -717,7 +718,11 @@ def export_observations_web(permissions):
             limit=current_app.config["SYNTHESE"]["NB_MAX_OBS_EXPORT"],
         )
 
-        exclude_geom_columns = [
+        # Overwrite geometry columns to compute the blurred geometry 
+        # from the blurring cte
+        geojson_4326_col = current_app.config["SYNTHESE"]["EXPORT_GEOJSON_4326_COL"]
+        geojson_local_col = current_app.config["SYNTHESE"]["EXPORT_GEOJSON_LOCAL_COL"]
+        columns_with_geom_excluded = [
             col
             for col in export_view.tableDef.columns
             if col.name
@@ -725,18 +730,19 @@ def export_observations_web(permissions):
                 "geometrie_wkt_4326",
                 "x_centroid_4326",
                 "y_centroid_4326",
-                "geojson_4326",
-                "geojson_local",
+                geojson_4326_col,
+                geojson_local_col,
             ]
         ]
-        new_geom_columns = [
+        blurred_geom_columns = [
             func.st_astext(cte_synthese_filtered.c.geom).label("geometrie_wkt_4326"),
             func.st_x(func.st_centroid(cte_synthese_filtered.c.geom)).label("x_centroid_4326"),
             func.st_y(func.st_centroid(cte_synthese_filtered.c.geom)).label("y_centroid_4326"),
-            func.st_asgeojson(cte_synthese_filtered.c.geom).label("geojson_4326"),
+            func.st_asgeojson(cte_synthese_filtered.c.geom).label(geojson_4326_col),
+            func.st_asgeojson(func.st_transform(cte_synthese_filtered.c.geom, 2154)).label(geojson_local_col),
         ]
 
-        selectable_columns = exclude_geom_columns + new_geom_columns
+        selectable_columns = columns_with_geom_excluded + blurred_geom_columns
 
     # Get the query for export
     export_query = (
