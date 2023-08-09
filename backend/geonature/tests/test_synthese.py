@@ -1,3 +1,5 @@
+from io import StringIO
+import csv
 import pytest
 import json
 import datetime
@@ -1265,6 +1267,24 @@ def synthese_read_permissions(synthese_module):
     return _synthese_read_permissions
 
 
+@pytest.fixture()
+def synthese_export_permissions(synthese_module):
+    def _synthese_export_permissions(role, scope_value, action="E", **kwargs):
+        action = PermAction.query.filter_by(code_action=action).one()
+        with db.session.begin_nested():
+            db.session.add(
+                Permission(
+                    role=role,
+                    action=action,
+                    module=synthese_module,
+                    scope_value=scope_value,
+                    **kwargs,
+                )
+            )
+
+    return _synthese_export_permissions
+
+
 def get_one_synthese_reponse_from_id(response: dict, id_synthese: int):
     return [
         synthese
@@ -1386,4 +1406,66 @@ class TestSyntheseBlurring:
 
         assert_unsensitive_synthese(
             json_synthese=response_json, synthese_from_db=unsensitive_synthese
+        )
+
+    def test_export_observations_unsensitive(
+        self, users, synthese_export_permissions, synthese_sensitive_data
+    ):
+        current_user = users["stranger_user"]
+        # None is 3
+        synthese_export_permissions(current_user, None, sensitivity_filter=True)
+        synthese_export_permissions(current_user, 1, sensitivity_filter=False)
+
+        set_logged_user_cookie(self.client, current_user)
+
+        list_id_synthese = [synthese.id_synthese for synthese in synthese_sensitive_data.values()]
+
+        response = self.client.post(
+            url_for("gn_synthese.export_observations_web"),
+            json=list_id_synthese,
+            query_string={"export_format": "csv"},
+        )
+
+        assert response.status_code == 200
+        file_like_obj = StringIO(response.data.decode("utf-8"))
+        reader = csv.DictReader(file_like_obj, delimiter=";")
+        for row in reader:
+            if (
+                int(row["id_synthese"])
+                == synthese_sensitive_data["obs_protected_not_sensitive"].id_synthese
+            ):
+                unsensitive_response_synthese = row
+
+        # Unsensitive
+        geom_shape = to_shape(synthese_sensitive_data["obs_protected_not_sensitive"].the_geom_4326)
+        assert float(unsensitive_response_synthese["x_centroid_4326"]) == geom_shape.x
+        assert float(unsensitive_response_synthese["y_centroid_4326"]) == geom_shape.y
+
+    def test_export_observations_sensitive(
+        self, users, synthese_export_permissions, synthese_sensitive_data
+    ):
+        current_user = users["stranger_user"]
+        # None is 3
+        synthese_export_permissions(current_user, None, sensitivity_filter=True)
+        synthese_export_permissions(current_user, 1, sensitivity_filter=False)
+
+        set_logged_user_cookie(self.client, current_user)
+
+        list_id_synthese = [synthese.id_synthese for synthese in synthese_sensitive_data.values()]
+
+        response = self.client.post(
+            url_for("gn_synthese.export_observations_web"),
+            json=list_id_synthese,
+            query_string={"export_format": "geojson"},
+        )
+
+        assert response.status_code == 200
+        sensitive_synthese = synthese_sensitive_data["obs_sensitive_protected"]
+        json_feature_synthese = [
+            feature
+            for feature in response.json["features"]
+            if feature["properties"]["id_synthese"] == sensitive_synthese.id_synthese
+        ][0]
+        assert_sensitive_synthese(
+            json_synthese=json_feature_synthese, synthese_from_db=sensitive_synthese
         )
