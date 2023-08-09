@@ -712,6 +712,7 @@ def export_observations_web(permissions):
         srid=srid,
     )
 
+    # If there is no sensitive permissions => same path as before blurring implementation
     if has_no_sensitive_permissions:
         # Get the CTE for synthese filtered by user permissions
         synthese_query_class = SyntheseQuery(
@@ -723,6 +724,9 @@ def export_observations_web(permissions):
         cte_synthese_filtered = synthese_query_class.build_query().cte("cte_synthese_filtered")
         selectable_columns = [export_view.tableDef]
     else:
+        # Use slightly the same process as for get_observations_for_web()
+        # Add a where_clause to filter the id_synthese provided to reduce the
+        # UNION queries
         where_clauses = [Synthese.id_synthese.in_(id_list)]
         unsensitive_area_query, sensitive_area_query = compute_blurring_query(
             filters={}, where_clauses=where_clauses
@@ -736,8 +740,7 @@ def export_observations_web(permissions):
             limit=current_app.config["SYNTHESE"]["NB_MAX_OBS_EXPORT"],
         )
 
-        # Overwrite geometry columns to compute the blurred geometry
-        # from the blurring cte
+        # Overwrite geometry columns to compute the blurred geometry from the blurring cte
         geojson_4326_col = current_app.config["SYNTHESE"]["EXPORT_GEOJSON_4326_COL"]
         geojson_local_col = current_app.config["SYNTHESE"]["EXPORT_GEOJSON_LOCAL_COL"]
         columns_with_geom_excluded = [
@@ -745,13 +748,14 @@ def export_observations_web(permissions):
             for col in export_view.tableDef.columns
             if col.name
             not in [
-                "geometrie_wkt_4326",
+                "geometrie_wkt_4326",  # FIXME: hardcoded column names?
                 "x_centroid_4326",
                 "y_centroid_4326",
                 geojson_4326_col,
                 geojson_local_col,
             ]
         ]
+        # Recomputed the blurred geometries
         blurred_geom_columns = [
             func.st_astext(cte_synthese_filtered.c.geom).label("geometrie_wkt_4326"),
             func.st_x(func.st_centroid(cte_synthese_filtered.c.geom)).label("x_centroid_4326"),
@@ -762,6 +766,7 @@ def export_observations_web(permissions):
             ),
         ]
 
+        # Finally provide all the columns to be selected in the export query
         selectable_columns = columns_with_geom_excluded + blurred_geom_columns
 
     # Get the query for export
