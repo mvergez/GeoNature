@@ -109,10 +109,12 @@ def build_sensitive_area_filters(query, current_user, sensitive_permissions):
 
 
 def compute_blurring_query(filters, where_clauses: list = []):
-    # TODO: see if alias are required for synthese query here
     # Build 2 queries that will be UNIONed
-    # SyntheseUnSensAlias = aliased(Synthese)
+    # The where_clauses list enables to add more conditions to the base query
+    # Used in export query
     where_clauses.append(Synthese.the_geom_4326.isnot(None))
+
+    # Query that will retain unsensitive observations
     unsensitive_area_query = SyntheseQuery(
         Synthese,
         select(
@@ -126,13 +128,22 @@ def compute_blurring_query(filters, where_clauses: list = []):
         .order_by(Synthese.id_synthese.desc()),
         filters=dict(filters),  # not to edit the actual filter object
     )
+
+    # In both queries, we applied all filters so that we do not need to query the
+    # whole synthese table
     unsensitive_area_query.filter_taxonomy()
     unsensitive_area_query.filter_other_filters(g.current_user)
     unsensitive_area_query.build_query()
 
-    # SyntheseAlias = aliased(Synthese)
+    # Query that will retain sensitive observations
     CorAreaSyntheseAlias = aliased(CorAreaSynthese)
     geom = LAreas.geom.st_transform(4326).label("geom")
+    # In SyntheseQuery below :
+    # - query_joins parameter is needed to bypass
+    #   "self.query_joins is not None" condition in the build_query() method below
+    # - priority is used to prevail non blurred geom over blurred geom if the user
+    #   can access to the non blurred geom
+    # - orderby needed to match the non blurred and the blurred observations
     sensitive_area_query = SyntheseQuery(
         Synthese,
         select(
@@ -155,9 +166,7 @@ def compute_blurring_query(filters, where_clauses: list = []):
             CorAreaSyntheseAlias.id_synthese == Synthese.id_synthese,
         ),
     )
-    # sensitive_area_query.add_join(
-    #     CorAreaSynthese, CorAreaSynthese.id_synthese, SyntheseAlias.id_synthese
-    # )
+    # Joins here are needed to retrieve the blurred geometry
     sensitive_area_query.add_join(LAreas, LAreas.id_area, CorAreaSyntheseAlias.id_area)
     sensitive_area_query.add_join(BibAreasTypes, BibAreasTypes.id_type, LAreas.id_type)
     sensitive_area_query.add_join(
@@ -165,6 +174,7 @@ def compute_blurring_query(filters, where_clauses: list = []):
         cor_sensitivity_area_type.c.id_area_type,
         BibAreasTypes.id_type,
     )
+    # Same for the first query => apply filter to avoid querying the whole table
     sensitive_area_query.filter_taxonomy()
     sensitive_area_query.filter_other_filters(g.current_user)
     sensitive_area_query.build_query()
@@ -179,28 +189,37 @@ def build_cte(
     unsensitive_area_query,
     limit,
 ):
-    # Unsensitive
-    # Sensitive
+    # The goal is to separate the sensitive and unsensitive permissions.
+    # But in sensitive permissions there can be unsensitive observations so we need
+    # to split them.
+    # sensitive_where_clause and unsensitive_where_clause represents this split
+    # See https://github.com/PnX-SI/GeoNature/issues/2558
     sensitive_where_clause, unsensitive_where_clause = build_sensitive_area_filters(
         sensitive_area_query, g.current_user, sensitive_permissions=sensitive_permissions
     )
+    # Unsensitive permission => all the observations that the user can see without blurring
     unsensitive_unsensitive_where_clause = unsensitive_area_query._filter_query_with_permissions(
         g.current_user, unsensitive_permissions
     )
 
-    query1 = unsensitive_area_query.query
-    query1 = query1.where(
+    # Building of the UNION query
+    # Apply limit not to query the whole synthese table
+    unsensitive_query = unsensitive_area_query.query
+    unsensitive_query = unsensitive_query.where(
         sa.or_(unsensitive_unsensitive_where_clause, unsensitive_where_clause)
     ).limit(limit)
-    query2 = sensitive_area_query.query
-    query2 = query2.where(sensitive_where_clause).limit(limit)
+    sensitive_query = sensitive_area_query.query
+    sensitive_query = sensitive_query.where(sensitive_where_clause).limit(limit)
 
-    return query1.union(query2).cte("blurring")
+    # Blurring cte representing the geometry blurred or not depending on the
+    # user's permissions and the sensibility of these observations
+    return unsensitive_query.union(sensitive_query).cte("blurring")
 
 
 def build_synthese_obs_query(observations, blurring_cte, filters, limit):
+    # Final observation query
+    # orderby priority as explained in build_cte()
     obs_query = (
-        # select([VSyntheseForWebApp.id_synthese, observations])
         select([observations])
         .distinct(VSyntheseForWebApp.id_synthese)
         .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
@@ -211,12 +230,17 @@ def build_synthese_obs_query(observations, blurring_cte, filters, limit):
     synthese_query_class = SyntheseQuery(
         VSyntheseForWebApp, obs_query, filters, geom_column=blurring_cte.c.geom
     )
+    # Join the blurring cte => better than where in_ blurring ids
     synthese_query_class.add_join(
         blurring_cte,
         blurring_cte.c.id_synthese,
         VSyntheseForWebApp.id_synthese,
     )
-    # synthese_query_class.filter_taxonomy()
+    # No need to filter taxonomy since it has been applied before on the 2 union
+    # queries. But need to call "filter_other_filters" for the geointersection
+    # filter. The latter is applied to the geom column of blurring cte.
+    # We need to show the user the blurred geom that intersects the geo filter
+    # provided
     synthese_query_class.filter_other_filters(g.current_user)
     synthese_query_class.build_query()
     return synthese_query_class.query
@@ -324,20 +348,20 @@ def get_observations_for_web(permissions):
     ]
     observations = func.json_build_object(*columns).label("obs_as_json")
 
-    # Need to pop out geoIntersection to put the filter AFTER the blurring cte
+    # Need to get geoIntersection to put the filter again AFTER the blurring cte
     # So the filter applies to the final geometry, not the precise point or the
     # blurred geometry. Only on the final geom
     geo_intersection_value = filters.get("geoIntersection", None)
     geo_intersection_filter = (
         {"geoIntersection": geo_intersection_value} if geo_intersection_value else {}
     )
-    # Need to check if there are sensitive permissions
+    # Need to check if there are blurring permissions so that the blurring process
+    # does not affect the performance if there is no blurring permissions
     sensitive, unsensitive = split_blurring_permissions(permissions)
     has_no_sensitive_permissions = len(list(sensitive)) == 0
     if has_no_sensitive_permissions:
-        # No need to apply blurring
+        # No need to apply blurring => same path as before blurring feature
         obs_query = (
-            # select([VSyntheseForWebApp.id_synthese, observations])
             select([observations])
             .where(VSyntheseForWebApp.the_geom_4326.isnot(None))
             .order_by(VSyntheseForWebApp.date_min.desc())
@@ -413,13 +437,6 @@ def get_observations_for_web(permissions):
             "observations", func.json_agg(obs_query.c.obs_as_json).label("observations")
         )
         query = select([obs_query.c.geojson, grouped_properties]).group_by(obs_query.c.geojson)
-    from sqlalchemy.dialects import postgresql
-
-    print(
-        str(query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
-        .replace("\n", "")
-        .replace("\\", "")
-    )
 
     results = DB.session.execute(query)
     # Build final GeoJson
@@ -521,7 +538,7 @@ def get_one_synthese(permissions, id_synthese):
         BlurredAreas = aliased(LAreas)
 
         # Inner join that retrieve the blurred area of the obs and the bigger areas
-        # used for "Zonages" in Synthese
+        # used for "Zonages" in Synthese. Need to have size_hierarchy from ref_geo
         inner = (
             sa.join(CorAreaSynthese, BlurredObsArea)
             .join(BlurredObsAreaType)
@@ -553,7 +570,7 @@ def get_one_synthese(permissions, id_synthese):
                 func.coalesce(BlurredObsArea.geom.st_transform(4326), Synthese.the_geom_4326),
             )
             .outerjoin(*outer)
-            # To populate Synthese.areas directly
+            # contains_eager: to populate Synthese.areas directly
             .options(contains_eager(Synthese.areas.of_type(BlurredAreas)))
             .filter(Synthese.id_synthese == id_synthese)
             .order_by(BlurredAreaTypes.size_hierarchy)
@@ -562,6 +579,7 @@ def get_one_synthese(permissions, id_synthese):
         # Use one here not first
         synthese_for_areas, the_geom = query.one()
         # Careful: do not db.session.commit after these lines !!!
+        # Because we set manually the synthese attributes
         synthese.the_geom_4326 = the_geom
         synthese.areas = synthese_for_areas.areas
 
@@ -718,7 +736,7 @@ def export_observations_web(permissions):
             limit=current_app.config["SYNTHESE"]["NB_MAX_OBS_EXPORT"],
         )
 
-        # Overwrite geometry columns to compute the blurred geometry 
+        # Overwrite geometry columns to compute the blurred geometry
         # from the blurring cte
         geojson_4326_col = current_app.config["SYNTHESE"]["EXPORT_GEOJSON_4326_COL"]
         geojson_local_col = current_app.config["SYNTHESE"]["EXPORT_GEOJSON_LOCAL_COL"]
@@ -739,7 +757,9 @@ def export_observations_web(permissions):
             func.st_x(func.st_centroid(cte_synthese_filtered.c.geom)).label("x_centroid_4326"),
             func.st_y(func.st_centroid(cte_synthese_filtered.c.geom)).label("y_centroid_4326"),
             func.st_asgeojson(cte_synthese_filtered.c.geom).label(geojson_4326_col),
-            func.st_asgeojson(func.st_transform(cte_synthese_filtered.c.geom, 2154)).label(geojson_local_col),
+            func.st_asgeojson(func.st_transform(cte_synthese_filtered.c.geom, 2154)).label(
+                geojson_local_col
+            ),
         ]
 
         selectable_columns = columns_with_geom_excluded + blurred_geom_columns
