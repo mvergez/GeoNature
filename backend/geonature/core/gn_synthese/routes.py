@@ -108,10 +108,11 @@ def build_sensitive_area_filters(query, current_user, sensitive_permissions):
     ), sa.and_(query.model.id_nomenclature_sensitivity.notin_(sensitive_nomenc), where_clause)
 
 
-def compute_blurring_query(filters):
+def compute_blurring_query(filters, where_clauses: list = []):
     # TODO: see if alias are required for synthese query here
     # Build 2 queries that will be UNIONed
     # SyntheseUnSensAlias = aliased(Synthese)
+    where_clauses.append(Synthese.the_geom_4326.isnot(None))
     unsensitive_area_query = SyntheseQuery(
         Synthese,
         select(
@@ -121,7 +122,7 @@ def compute_blurring_query(filters):
                 func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
             ]
         )
-        .where(Synthese.the_geom_4326.isnot(None))
+        .where(sa.and_(*where_clauses))
         .order_by(Synthese.id_synthese.desc()),
         filters=dict(filters),  # not to edit the actual filter object
     )
@@ -145,7 +146,7 @@ def compute_blurring_query(filters):
             cor_sensitivity_area_type.c.id_nomenclature_sensitivity
             == Synthese.id_nomenclature_sensitivity
         )
-        .where(Synthese.the_geom_4326.isnot(None))
+        .where(sa.and_(*where_clauses))
         .order_by(Synthese.id_synthese.desc()),
         filters=dict(filters),
         query_joins=sa.join(
@@ -371,11 +372,6 @@ def get_observations_for_web(permissions):
             limit=result_limit,
         )
         geojson_column = func.st_asgeojson(blurring_cte.c.geom)
-
-    # TODO: distinct on id_synthese !!!!!
-
-    # TODO DO NOT FORGET THE ORDER BY PRIORITY
-    # order_by(obs_subquery.c.id_synthese, obs_subquery.c.priority.desc())
 
     if output_format == "grouped_geom_by_areas":
         # SQLAlchemy 1.4: replace column by add_columns
@@ -684,14 +680,8 @@ def export_observations_web(permissions):
     # Get the SRID for the export
     srid = DB.session.execute(func.Find_SRID("gn_synthese", "synthese", "the_geom_local")).scalar()
 
-    # Get the CTE for synthese filtered by user permissions
-    synthese_query_class = SyntheseQuery(
-        Synthese,
-        select([Synthese.id_synthese]),
-        {},
-    )
-    synthese_query_class.filter_query_all_filters(g.current_user, permissions)
-    cte_synthese_filtered = synthese_query_class.build_query().cte("cte_synthese_filtered")
+    sensitive, unsensitive = split_blurring_permissions(permissions)
+    has_no_sensitive_permissions = len(list(sensitive)) == 0
 
     # Get the view for export
     export_view = GenericTableGeo(
@@ -702,9 +692,55 @@ def export_observations_web(permissions):
         srid=srid,
     )
 
+    # TODO: faire une vue SQL pour exporter les obs sensibles
+    if has_no_sensitive_permissions:
+        # Get the CTE for synthese filtered by user permissions
+        synthese_query_class = SyntheseQuery(
+            Synthese,
+            select([Synthese.id_synthese]),
+            {},
+        )
+        synthese_query_class.filter_query_all_filters(g.current_user, permissions)
+        cte_synthese_filtered = synthese_query_class.build_query().cte("cte_synthese_filtered")
+        selectable_columns = [export_view.tableDef]
+    else:
+        where_clauses = [Synthese.id_synthese.in_(id_list)]
+        unsensitive_area_query, sensitive_area_query = compute_blurring_query(
+            filters={}, where_clauses=where_clauses
+        )
+
+        cte_synthese_filtered = build_cte(
+            sensitive_permissions=sensitive,
+            unsensitive_permissions=unsensitive,
+            sensitive_area_query=sensitive_area_query,
+            unsensitive_area_query=unsensitive_area_query,
+            limit=current_app.config["SYNTHESE"]["NB_MAX_OBS_EXPORT"],
+        )
+
+        exclude_geom_columns = [
+            col
+            for col in export_view.tableDef.columns
+            if col.name
+            not in [
+                "geometrie_wkt_4326",
+                "x_centroid_4326",
+                "y_centroid_4326",
+                "geojson_4326",
+                "geojson_local",
+            ]
+        ]
+        new_geom_columns = [
+            func.st_astext(cte_synthese_filtered.c.geom).label("geometrie_wkt_4326"),
+            func.st_x(func.st_centroid(cte_synthese_filtered.c.geom)).label("x_centroid_4326"),
+            func.st_y(func.st_centroid(cte_synthese_filtered.c.geom)).label("y_centroid_4326"),
+            func.st_asgeojson(cte_synthese_filtered.c.geom).label("geojson_4326"),
+        ]
+
+        selectable_columns = exclude_geom_columns + new_geom_columns
+
     # Get the query for export
     export_query = (
-        select([export_view.tableDef])
+        select(selectable_columns)
         .select_from(
             export_view.tableDef.join(
                 cte_synthese_filtered,
