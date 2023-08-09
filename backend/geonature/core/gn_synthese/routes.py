@@ -14,7 +14,6 @@ from flask import (
     jsonify,
     g,
 )
-from geoalchemy2 import Geometry
 from pypnnomenclature.models import BibNomenclaturesTypes, TNomenclatures
 from werkzeug.exceptions import Forbidden, NotFound, BadRequest, Conflict
 from werkzeug.datastructures import MultiDict
@@ -74,14 +73,6 @@ from apptax.taxonomie.models import (
 routes = Blueprint("gn_synthese", __name__)
 
 
-class RawGeometry(Geometry):
-
-    """This class is used to remove the 'ST_AsEWKB()'' function from select queries"""
-
-    def column_expression(self, col):
-        return col
-
-
 ############################################
 ########### GET OBSERVATIONS  ##############
 ############################################
@@ -121,7 +112,7 @@ def compute_blurring_query(filters, where_clauses: list = []):
             [
                 sa.literal(1).label("priority"),
                 Synthese.id_synthese.label("id_synthese"),
-                func.ST_SetSRID(Synthese.the_geom_4326, 4326, type_=RawGeometry).label("geom"),
+                Synthese.the_geom_4326.label("geom"),
             ]
         )
         .where(sa.and_(*where_clauses))
@@ -439,6 +430,7 @@ def get_observations_for_web(permissions):
         query = select([obs_query.c.geojson, grouped_properties]).group_by(obs_query.c.geojson)
 
     results = DB.session.execute(query)
+
     # Build final GeoJson
     geojson_features = []
     for geom_as_geojson, properties in results:
