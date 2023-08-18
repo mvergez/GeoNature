@@ -85,14 +85,16 @@ def split_blurring_permissions(permissions):
 
 
 def build_sensitive_area_filters(query, current_user, sensitive_permissions):
-    where_clause = query._filter_query_with_permissions(current_user, sensitive_permissions)
-    sensitive_nomenc = (
+    nomenclature_cte = (
         TNomenclatures.query.with_entities(TNomenclatures.id_nomenclature)
         .filter(
             TNomenclatures.nomenclature_type.has(BibNomenclaturesTypes.mnemonique == "SENSIBILITE")
         )
         .filter(TNomenclatures.cd_nomenclature != "0")
+        .cte("sensible")
     )
+    where_clause = query._filter_query_with_permissions(current_user, sensitive_permissions)
+    sensitive_nomenc = select(["*"]).select_from(nomenclature_cte)
 
     return sa.and_(
         where_clause, query.model.id_nomenclature_sensitivity.in_(sensitive_nomenc)
