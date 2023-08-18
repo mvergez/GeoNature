@@ -179,6 +179,39 @@ puis dans les détails d'une observation de votre/vos espèce(s).
 Utilisation
 ```````````
 
-Actuellement, le niveau de sensibilité des observations n’est pas exploité par GeoNature.
-Le floutage des observations en fonction de leur niveau de sensibilité est une fonctionnalité
-souhaitée mais pas encore présente dans GeoNature.
+Un lien entre la synthèse et la sensibilité a été mis en place : le floutage des données sensibles.
+
+L'objectif et de pouvoir donner accès aux utilisateurs à des données sensibles mais pas de façon précise.
+C'est à dire, en fonction du niveau de sensibilité de l'observation, un utilisateur pourra voir uniquement 
+l'observation à la maille de 10km par exemple.
+
+Implementation
+^^^^^^^^^^^^^^
+
+Basée sur le nouveau système de permissions (v2.13), l'implémentation dans ce système se résout à 
+l'ajout d'un filtre : exlure les données sensibles. C'est un booleen qui permet de rendre visible ou 
+non les observations dégradées.
+
+Si ce filtre n'est pas activé, la récupération des données de la synthèse en backend reste inchangée.
+En effet, l'ajout du floutage des données nuit forcément aux performances.
+
+S'il est activé, une requête SQL est construite comme suit : 
+
+.. image :: https://raw.githubusercontent.com/PnX-SI/GeoNature/develop/docs/images/blurring_query.svg
+
+Le but est d'ajouter à la requête principale une sous-requête exécutant deux requêtes ``SELECT`` dans 
+la table de synthèse afin de séparer les données précises des données floutées. Ensuite un ``UNION`` 
+est fait afin de rassembler les données avec priorité sur les données précises.
+
+Dans ces deux requêtes, les permissions ainsi que les filtres utilisateurs sont pris en comptes, donc 
+l'utilisateur n'a pas obligatoirement accès à toutes les données, c'est à la charge de l'administrateur.
+Le fait de prendre en compte les filtres dans chacune des deux requêtes permet une cohérence dans les 
+résultats renvoyés par ces deux requêtes (car un ``LIMIT`` est souvent présent).
+
+Ce floutage des données a été implémenté sur 3 routes : 
+
+* ``/for_web``
+* ``/vsynthese/<id_synthese>``
+* ``/export_observations``
+
+Des tests unitaires ont également été écrits.
