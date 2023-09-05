@@ -501,8 +501,7 @@ def get_one_synthese(permissions, id_synthese):
     ]
 
     # get reports info only if activated by admin config
-    alertModulesActivated = current_app.config["SYNTHESE"]["ALERT_MODULES"]
-    if len(alertModulesActivated) and "SYNTHESE" in alertModulesActivated:
+    if "SYNTHESE" in current_app.config["SYNTHESE"]["ALERT_MODULES"]:
         fields.append("reports.report_type.type")
         synthese = synthese.options(lazyload(Synthese.reports).joinedload(TReport.report_type))
 
