@@ -707,7 +707,9 @@ def export_observations_web(permissions):
     id_list = request.get_json()
 
     # Get the SRID for the export
-    srid = DB.session.execute(func.Find_SRID("gn_synthese", "synthese", "the_geom_local")).scalar()
+    local_srid = DB.session.execute(
+        func.Find_SRID("gn_synthese", "synthese", "the_geom_local")
+    ).scalar()
 
     blurring_permissions, precise_permissions = split_blurring_precise_permissions(permissions)
 
@@ -719,7 +721,7 @@ def export_observations_web(permissions):
         schemaName="gn_synthese",
         engine=DB.engine,
         geometry_field=None,
-        srid=srid,
+        srid=local_srid,
     )
 
     # If there is no sensitive permissions => same path as before blurring implementation
@@ -771,7 +773,7 @@ def export_observations_web(permissions):
             func.st_x(func.st_centroid(cte_synthese_filtered.c.geom)).label("x_centroid_4326"),
             func.st_y(func.st_centroid(cte_synthese_filtered.c.geom)).label("y_centroid_4326"),
             func.st_asgeojson(cte_synthese_filtered.c.geom).label(geojson_4326_col),
-            func.st_asgeojson(func.st_transform(cte_synthese_filtered.c.geom, 2154)).label(
+            func.st_asgeojson(func.st_transform(cte_synthese_filtered.c.geom, local_srid)).label(
                 geojson_local_col
             ),
         ]
