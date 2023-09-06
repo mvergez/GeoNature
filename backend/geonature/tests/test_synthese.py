@@ -17,7 +17,7 @@ from shapely.geometry import Point
 from geonature.utils.env import db
 from geonature.core.gn_meta.models import TDatasets
 from geonature.core.gn_synthese.models import Synthese, TSources
-from geonature.core.gn_synthese.routes import split_blurring_permissions
+from geonature.core.gn_synthese.routes import split_blurring_precise_permissions
 from geonature.core.gn_commons.models.base import TModules
 from geonature.core.gn_permissions.models import PermAction, Permission
 from geonature.core.gn_permissions.tools import get_permissions
@@ -1321,7 +1321,7 @@ def assert_sensitive_synthese(json_synthese, synthese_from_db):
 
 @pytest.mark.usefixtures("client_class", "temporary_transaction")
 class TestSyntheseBlurring:
-    def test_split_blurring_permissions(
+    def test_split_blurring_precise_permissions(
         self, app, users, synthese_module, synthese_read_permissions
     ):
         current_user = users["self_user"]
@@ -1337,7 +1337,7 @@ class TestSyntheseBlurring:
                 module_code=synthese_module.module_code,
                 object_code="ALL",
             )
-        sensitive, unsensitive = split_blurring_permissions(permissions=permissions)
+        blurring_perms, precise_perms = split_blurring_precise_permissions(permissions)
 
         assert all(s.sensitivity_filter for s in blurring_perms)
         assert all(not s.sensitivity_filter for s in precise_perms)

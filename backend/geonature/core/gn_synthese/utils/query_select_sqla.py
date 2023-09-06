@@ -132,9 +132,9 @@ class SyntheseQuery:
                 # push the joined table in _already_joined_table list
                 self._already_joined_table.append(right_table)
 
-    def _filter_query_with_permissions(self, user, permissions):
+    def build_permissions_filter(self, user, permissions):
         """
-        Filter the query with the permissions of a user
+        Return a where clause for the given permissions set
         """
         subquery_observers = (
             select([CorObserverSynthese.id_synthese])
@@ -187,7 +187,10 @@ class SyntheseQuery:
             return sa.false()
 
     def filter_query_with_permissions(self, user, permissions):
-        where_clause = self._filter_query_with_permissions(user=user, permissions=permissions)
+        """
+        Filter the query with the permissions of a user
+        """
+        where_clause = self.build_permissions_filter(user=user, permissions=permissions)
         self.query = self.query.where(where_clause)
 
     def filter_query_with_cruved(self, user, scope):
