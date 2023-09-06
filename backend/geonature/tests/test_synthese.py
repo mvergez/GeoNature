@@ -1253,16 +1253,16 @@ def synthese_module():
 def synthese_read_permissions(synthese_module):
     def _synthese_read_permissions(role, scope_value, action="R", **kwargs):
         action = PermAction.query.filter_by(code_action=action).one()
+        perm = Permission(
+            role=role,
+            action=action,
+            module=synthese_module,
+            scope_value=scope_value,
+            **kwargs,
+        )
         with db.session.begin_nested():
-            db.session.add(
-                Permission(
-                    role=role,
-                    action=action,
-                    module=synthese_module,
-                    scope_value=scope_value,
-                    **kwargs,
-                )
-            )
+            db.session.add(perm)
+        return perm
 
     return _synthese_read_permissions
 
@@ -1271,16 +1271,16 @@ def synthese_read_permissions(synthese_module):
 def synthese_export_permissions(synthese_module):
     def _synthese_export_permissions(role, scope_value, action="E", **kwargs):
         action = PermAction.query.filter_by(code_action=action).one()
+        perm = Permission(
+            role=role,
+            action=action,
+            module=synthese_module,
+            scope_value=scope_value,
+            **kwargs,
+        )
         with db.session.begin_nested():
-            db.session.add(
-                Permission(
-                    role=role,
-                    action=action,
-                    module=synthese_module,
-                    scope_value=scope_value,
-                    **kwargs,
-                )
-            )
+            db.session.add(perm)
+        return perm
 
     return _synthese_export_permissions
 
@@ -1325,6 +1325,10 @@ class TestSyntheseBlurring:
         self, app, users, synthese_module, synthese_read_permissions
     ):
         current_user = users["self_user"]
+
+        blurring_perm = synthese_read_permissions(current_user, None, sensitivity_filter=True)
+        precise_perm = synthese_read_permissions(current_user, 2, sensitivity_filter=False)
+
         with app.test_request_context(headers=logged_user_headers(current_user)):
             app.preprocess_request()
             permissions = get_permissions(
@@ -1335,8 +1339,10 @@ class TestSyntheseBlurring:
             )
         sensitive, unsensitive = split_blurring_permissions(permissions=permissions)
 
-        assert all(s.sensitivity_filter for s in sensitive)
-        assert all(not s.sensitivity_filter for s in unsensitive)
+        assert all(s.sensitivity_filter for s in blurring_perms)
+        assert all(not s.sensitivity_filter for s in precise_perms)
+        assert blurring_perm in blurring_perms
+        assert precise_perm in precise_perms
 
     def test_get_observations_for_web_blurring(
         self, users, synthese_sensitive_data, source, synthese_read_permissions
