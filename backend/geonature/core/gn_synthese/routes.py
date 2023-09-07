@@ -231,36 +231,21 @@ def build_allowed_geom_cte(
     return precise_geom_query.union(blurred_geom_query).cte("allowed_geom")
 
 
-def build_synthese_obs_query(observations, allowed_geom_cte, filters, limit):
+def build_synthese_obs_query(observations, allowed_geom_cte, limit):
     # Final observation query
     # orderby priority as explained in build_allowed_geom_cte()
     obs_query = (
         select([observations])
-        .distinct(VSyntheseForWebApp.id_synthese)
-        .where(
-            VSyntheseForWebApp.the_geom_4326.isnot(None)
+        .select_from(
+            VSyntheseForWebApp.__table__.join(
+                allowed_geom_cte, allowed_geom_cte.c.id_synthese == VSyntheseForWebApp.id_synthese
+            )
         )
         .order_by(VSyntheseForWebApp.id_synthese, allowed_geom_cte.c.priority)
+        .distinct(VSyntheseForWebApp.id_synthese)
         .limit(limit)
     )
-
-    synthese_query_class = SyntheseQuery(
-        VSyntheseForWebApp, obs_query, filters, geom_column=allowed_geom_cte.c.geom
-    )
-    # Join the allowed geom cte
-    synthese_query_class.add_join(
-        allowed_geom_cte,
-        allowed_geom_cte.c.id_synthese,
-        VSyntheseForWebApp.id_synthese,
-    )
-    # No need to filter taxonomy since it has been applied before on the 2 union
-    # queries. But need to call "filter_other_filters" for the geointersection
-    # filter. The latter is applied to the geom column of blurring cte.
-    # We need to show the user the blurred geom that intersects the geo filter
-    # provided
-    synthese_query_class.filter_other_filters(g.current_user)
-    synthese_query_class.build_query()
-    return synthese_query_class.query
+    return obs_query
 
 
 @routes.route("/for_web", methods=["GET", "POST"])
@@ -365,13 +350,6 @@ def get_observations_for_web(permissions):
     ]
     observations = func.json_build_object(*columns).label("obs_as_json")
 
-    # Need to get geoIntersection to put the filter again AFTER the blurring cte
-    # So the filter applies to the final geometry, not the precise point or the
-    # blurred geometry. Only on the final geom
-    geo_intersection_value = filters.get("geoIntersection", None)
-    geo_intersection_filter = (
-        {"geoIntersection": geo_intersection_value} if geo_intersection_value else {}
-    )
     # Need to check if there are blurring permissions so that the blurring process
     # does not affect the performance if there is no blurring permissions
     blurring_permissions, precise_permissions = split_blurring_precise_permissions(permissions)
@@ -408,7 +386,6 @@ def get_observations_for_web(permissions):
         obs_query = build_synthese_obs_query(
             observations=observations,
             allowed_geom_cte=allowed_geom_cte,
-            filters=geo_intersection_filter,
             limit=result_limit,
         )
         geojson_column = func.st_asgeojson(allowed_geom_cte.c.geom)
