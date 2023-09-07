@@ -18,6 +18,8 @@ from sqlalchemy.orm import aliased
 from werkzeug.exceptions import BadRequest
 from shapely.geometry import shape
 from geoalchemy2.shape import from_shape
+from pyproj import CRS, Transformer
+from shapely.ops import transform
 
 from geonature.utils.env import DB
 
@@ -72,6 +74,7 @@ class SyntheseQuery:
         with_generic_table=False,
         query_joins=None,
         geom_column=None,
+        geom_column_srid=4326,
     ):
         self.query = query
 
@@ -81,6 +84,7 @@ class SyntheseQuery:
         self._already_joined_table = []
         self.query_joins = query_joins
         self.geom_column = geom_column if geom_column is not None else model.the_geom_4326
+        self.geom_column_srid = geom_column_srid
 
         if with_generic_table:
             model_temp = model.columns
@@ -420,7 +424,15 @@ class SyntheseQuery:
                 raise BadRequest("Unsupported geoIntersection type")
             geo_filters = []
             for feature in features:
-                geom_wkb = from_shape(shape(feature["geometry"]), srid=4326)
+                geom_4326 = shape(feature["geometry"])
+                if self.geom_column_srid != 4326:
+                    projection = Transformer.from_crs(
+                        CRS(4326), CRS(self.geom_column_srid), always_xy=True
+                    )
+                    geom_correct_srid = transform(projection.transform, geom_4326)
+                else:
+                    geom_correct_srid = geom_4326
+                geom_wkb = from_shape(geom_correct_srid, srid=self.geom_column_srid)
                 # if the geom is a circle
                 if "radius" in feature["properties"]:
                     radius = feature["properties"]["radius"]

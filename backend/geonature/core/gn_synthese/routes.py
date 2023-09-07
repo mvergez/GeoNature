@@ -145,6 +145,7 @@ def build_blurred_precise_geom_queries(filters, where_clauses: list = []):
     # - priority is used to prevail non blurred geom over blurred geom if the user
     #   can access to the non blurred geom
     # - orderby needed to match the non blurred and the blurred observations
+    areas_srid = DB.session.execute(func.Find_SRID("ref_geo", "l_areas", "geom")).scalar()
     blurred_geom_query = SyntheseQuery(
         Synthese,
         select(
@@ -166,6 +167,8 @@ def build_blurred_precise_geom_queries(filters, where_clauses: list = []):
             CorAreaSyntheseAlias,
             CorAreaSyntheseAlias.id_synthese == Synthese.id_synthese,
         ),
+        geom_column=LAreas.geom,
+        geom_column_srid=areas_srid,
     )
     # Joins here are needed to retrieve the blurred geometry
     blurred_geom_query.add_join(LAreas, LAreas.id_area, CorAreaSyntheseAlias.id_area)
