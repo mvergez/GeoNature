@@ -473,13 +473,17 @@ class SyntheseQuery:
         # generic filters
         for colname, value in self.filters.items():
             if colname.startswith("area"):
-                cor_area_synthese_alias = aliased(CorAreaSynthese)
-                self.add_join(
-                    cor_area_synthese_alias,
-                    cor_area_synthese_alias.id_synthese,
-                    self.model.id_synthese,
-                )
-                self.query = self.query.where(cor_area_synthese_alias.id_area.in_(value))
+                if self.geom_column.class_ != self.model:
+                    l_areas_cte = LAreas.query.filter(LAreas.id_area.in_(value)).cte("area_filter")
+                    self.query = self.query.where(func.ST_Intersects(self.geom_column, l_areas_cte.c.geom))
+                else:
+                    cor_area_synthese_alias = aliased(CorAreaSynthese)
+                    self.add_join(
+                        cor_area_synthese_alias,
+                        cor_area_synthese_alias.id_synthese,
+                        self.model.id_synthese,
+                    )
+                    self.query = self.query.where(cor_area_synthese_alias.id_area.in_(value))
             elif colname.startswith("id_"):
                 col = getattr(self.model.__table__.columns, colname)
                 if isinstance(value, list):
