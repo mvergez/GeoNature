@@ -1378,6 +1378,51 @@ class TestSyntheseBlurring:
             json_synthese=sensitive_synthese_from_response, synthese_from_db=sensitive_synthese
         )
 
+    def test_get_observations_for_web_blurring_grouped_geom(
+        self,
+        users,
+        synthese_sensitive_data,
+        source,
+        synthese_read_permissions,
+        monkeypatch,
+    ):
+        # So that all burred geoms will not appear on the aggregated areas
+        monkeypatch.setitem(current_app.config["SYNTHESE"], "AREA_AGGREGATION_TYPE", "M1")
+
+        current_user = users["stranger_user"]
+        set_logged_user(self.client, current_user)
+        # None is 3
+        synthese_read_permissions(current_user, None, sensitivity_filter=True)
+        synthese_read_permissions(current_user, 1, sensitivity_filter=False)
+
+        response = self.client.get(
+            url_for("gn_synthese.get_observations_for_web"),
+            query_string={
+                "format": "grouped_geom_by_areas",
+            },
+            json={
+                "id_source": [source.id_source],
+            },
+        )
+
+        json_resp = response.json
+        sensitive_synthese_ids = [
+            synthese.id_synthese
+            for synthese in (
+                synthese_sensitive_data["obs_sensitive_protected"],
+                synthese_sensitive_data["obs_sensitive_protected_2"],
+            )
+        ]
+
+        assert all(
+            feature["geometry"] is None
+            for feature in json_resp["features"]
+            if all(
+                observation["id"] in sensitive_synthese_ids
+                for observation in feature["properties"]["observations"]
+            )
+        )
+
     def test_get_one_synthese_sensitive(
         self, users, synthese_sensitive_data, synthese_read_permissions
     ):
@@ -1444,8 +1489,12 @@ class TestSyntheseBlurring:
 
         # Unsensitive
         geom_shape = to_shape(synthese_sensitive_data["obs_protected_not_sensitive"].the_geom_4326)
-        assert float(unsensitive_response_synthese["x_centroid_4326"]) == geom_shape.x
-        assert float(unsensitive_response_synthese["y_centroid_4326"]) == geom_shape.y
+        assert float(unsensitive_response_synthese["x_centroid_4326"]) == pytest.approx(
+            geom_shape.x, 0.000001
+        )
+        assert float(unsensitive_response_synthese["y_centroid_4326"]) == pytest.approx(
+            geom_shape.y, 0.000001
+        )
 
     def test_export_observations_sensitive(
         self, users, synthese_export_permissions, synthese_sensitive_data
