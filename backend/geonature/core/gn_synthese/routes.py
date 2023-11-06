@@ -108,7 +108,9 @@ def build_sensitive_unsensitive_filters():
     )
 
 
-def build_blurred_precise_geom_queries(filters, where_clauses: list = []):
+def build_blurred_precise_geom_queries(
+    filters, where_clauses: list = [], select_size_hierarchy=False
+):
     # Build 2 queries that will be UNIONed
     # The where_clauses list enables to add more conditions to the base query
     # Used in export query
@@ -116,17 +118,19 @@ def build_blurred_precise_geom_queries(filters, where_clauses: list = []):
 
     # Query precise geom, for use with unsensitive observations
     # and sensitive observations with precise permission
+    columns = [
+        sa.literal(1).label("priority"),
+        Synthese.id_synthese.label("id_synthese"),
+        Synthese.the_geom_4326.label("geom"),
+    ]
+    # Size hierarchy can be used here to filter on it in
+    # a mesh mode scenario.
+    if select_size_hierarchy:
+        # null since no blurring geometry is associated here
+        columns.append(sa.sql.null().label("size_hierarchy"))
     precise_geom_query = SyntheseQuery(
         Synthese,
-        select(
-            [
-                sa.literal(1).label("priority"),
-                Synthese.id_synthese.label("id_synthese"),
-                Synthese.the_geom_4326.label("geom"),
-            ]
-        )
-        .where(sa.and_(*where_clauses))
-        .order_by(Synthese.id_synthese.desc()),
+        select(columns).where(sa.and_(*where_clauses)).order_by(Synthese.id_synthese.desc()),
         filters=dict(filters),  # not to edit the actual filter object
     )
 
@@ -146,15 +150,17 @@ def build_blurred_precise_geom_queries(filters, where_clauses: list = []):
     #   can access to the non blurred geom
     # - orderby needed to match the non blurred and the blurred observations
     areas_srid = DB.session.execute(func.Find_SRID("ref_geo", "l_areas", "geom")).scalar()
+    columns = [
+        sa.literal(2).label("priority"),
+        Synthese.id_synthese.label("id_synthese"),
+        geom,
+    ]
+    # size hierarchy is the size of the joined blurring area
+    if select_size_hierarchy:
+        columns.append(BibAreasTypes.size_hierarchy.label("size_hierarchy"))
     blurred_geom_query = SyntheseQuery(
         Synthese,
-        select(
-            [
-                sa.literal(2).label("priority"),
-                Synthese.id_synthese.label("id_synthese"),
-                geom,
-            ]
-        )
+        select(columns)
         .where(
             cor_sensitivity_area_type.c.id_nomenclature_sensitivity
             == Synthese.id_nomenclature_sensitivity
@@ -373,7 +379,11 @@ def get_observations_for_web(permissions):
         geojson_column = VSyntheseForWebApp.st_asgeojson
     else:
         # Build 2 queries that will be UNIONed
-        blurred_geom_query, precise_geom_query = build_blurred_precise_geom_queries(filters)
+        # Select size hierarchy if mesh mode is selected
+        select_size_hierarchy = output_format == "grouped_geom_by_areas"
+        blurred_geom_query, precise_geom_query = build_blurred_precise_geom_queries(
+            filters, select_size_hierarchy=select_size_hierarchy
+        )
 
         allowed_geom_cte = build_allowed_geom_cte(
             blurring_permissions=blurring_permissions,
@@ -392,7 +402,11 @@ def get_observations_for_web(permissions):
 
     if output_format == "grouped_geom_by_areas":
         # SQLAlchemy 1.4: replace column by add_columns
-        obs_query = obs_query.column(VSyntheseForWebApp.id_synthese).cte("OBS")
+        obs_query = obs_query.column(VSyntheseForWebApp.id_synthese)
+        # Need to select the size_hierarchy to use is after (only if blurring permissions are found)
+        if blurring_permissions:
+            obs_query = obs_query.column(allowed_geom_cte.c.size_hierarchy.label("size_hierarchy"))
+        obs_query = obs_query.cte("OBS")
         agg_areas = (
             select([CorAreaSynthese.id_synthese, LAreas.id_area])
             .select_from(
@@ -405,7 +419,17 @@ def get_observations_for_web(permissions):
             )
             .where(CorAreaSynthese.id_synthese == VSyntheseForWebApp.id_synthese)
             .where(
-                BibAreasTypes.type_code == current_app.config["SYNTHESE"]["AREA_AGGREGATION_TYPE"]
+                sa.and_(
+                    BibAreasTypes.type_code
+                    == current_app.config["SYNTHESE"]["AREA_AGGREGATION_TYPE"],
+                    # Do not select cells which size_hierarchy is bigger than AREA_AGGREGATION_TYPE
+                    # It means that we do not aggregate obs that have a blurring geometry greater in
+                    # size than the aggregation area
+                    sa.or_(
+                        obs_query.c.size_hierarchy.is_(None),
+                        obs_query.c.size_hierarchy <= BibAreasTypes.size_hierarchy,
+                    ),
+                )
             )
             .lateral("agg_areas")
         )
@@ -430,6 +454,14 @@ def get_observations_for_web(permissions):
             "observations", func.json_agg(obs_query.c.obs_as_json).label("observations")
         )
         query = select([obs_query.c.geojson, grouped_properties]).group_by(obs_query.c.geojson)
+
+    from sqlalchemy.dialects import postgresql
+
+    print(
+        str(
+            query.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+        ).replace("\n", "")
+    )
 
     results = DB.session.execute(query)
 
