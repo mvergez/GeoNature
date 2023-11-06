@@ -403,9 +403,22 @@ def get_observations_for_web(permissions):
     if output_format == "grouped_geom_by_areas":
         # SQLAlchemy 1.4: replace column by add_columns
         obs_query = obs_query.column(VSyntheseForWebApp.id_synthese)
+        area_type_where_clause = (
+            BibAreasTypes.type_code == current_app.config["SYNTHESE"]["AREA_AGGREGATION_TYPE"]
+        )
         # Need to select the size_hierarchy to use is after (only if blurring permissions are found)
         if blurring_permissions:
             obs_query = obs_query.column(allowed_geom_cte.c.size_hierarchy.label("size_hierarchy"))
+            area_type_where_clause = sa.and_(
+                area_type_where_clause,
+                # Do not select cells which size_hierarchy is bigger than AREA_AGGREGATION_TYPE
+                # It means that we do not aggregate obs that have a blurring geometry greater in
+                # size than the aggregation area
+                sa.or_(
+                    obs_query.c.size_hierarchy.is_(None),
+                    obs_query.c.size_hierarchy <= BibAreasTypes.size_hierarchy,
+                ),
+            )
         obs_query = obs_query.cte("OBS")
         agg_areas = (
             select([CorAreaSynthese.id_synthese, LAreas.id_area])
@@ -418,19 +431,7 @@ def get_observations_for_web(permissions):
                 ),
             )
             .where(CorAreaSynthese.id_synthese == VSyntheseForWebApp.id_synthese)
-            .where(
-                sa.and_(
-                    BibAreasTypes.type_code
-                    == current_app.config["SYNTHESE"]["AREA_AGGREGATION_TYPE"],
-                    # Do not select cells which size_hierarchy is bigger than AREA_AGGREGATION_TYPE
-                    # It means that we do not aggregate obs that have a blurring geometry greater in
-                    # size than the aggregation area
-                    sa.or_(
-                        obs_query.c.size_hierarchy.is_(None),
-                        obs_query.c.size_hierarchy <= BibAreasTypes.size_hierarchy,
-                    ),
-                )
-            )
+            .where(area_type_where_clause)
             .lateral("agg_areas")
         )
         obs_query = (
