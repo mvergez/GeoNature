@@ -1406,6 +1406,8 @@ class TestSyntheseBlurring:
         )
 
         json_resp = response.json
+
+        # Retrieve only sensitive synthese ids
         sensitive_synthese_ids = [
             synthese.id_synthese
             for synthese in (
@@ -1414,6 +1416,8 @@ class TestSyntheseBlurring:
             )
         ]
 
+        # If an observation is blurred and the AREA_AGGREGATION_TYPE is smaller in
+        # size than the blurred observation then the observation should not appear
         assert all(
             feature["geometry"] is None
             for feature in json_resp["features"]
