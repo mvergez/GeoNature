@@ -126,8 +126,8 @@ def build_blurred_precise_geom_queries(
     # Size hierarchy can be used here to filter on it in
     # a mesh mode scenario.
     if select_size_hierarchy:
-        # null since no blurring geometry is associated here
-        columns.append(sa.sql.null().label("size_hierarchy"))
+        # 0 since no blurring geometry is associated here and a point have a 0 size
+        columns.append(sa.literal(0).label("size_hierarchy"))
     precise_geom_query = SyntheseQuery(
         Synthese,
         select(columns).where(sa.and_(*where_clauses)).order_by(Synthese.id_synthese.desc()),
@@ -403,23 +403,11 @@ def get_observations_for_web(permissions):
     if output_format == "grouped_geom_by_areas":
         # SQLAlchemy 1.4: replace column by add_columns
         obs_query = obs_query.column(VSyntheseForWebApp.id_synthese)
-        area_type_where_clause = (
-            BibAreasTypes.type_code == current_app.config["SYNTHESE"]["AREA_AGGREGATION_TYPE"]
-        )
         # Need to select the size_hierarchy to use is after (only if blurring permissions are found)
         if blurring_permissions:
             obs_query = obs_query.column(allowed_geom_cte.c.size_hierarchy.label("size_hierarchy"))
-            area_type_where_clause = sa.and_(
-                area_type_where_clause,
-                # Do not select cells which size_hierarchy is bigger than AREA_AGGREGATION_TYPE
-                # It means that we do not aggregate obs that have a blurring geometry greater in
-                # size than the aggregation area
-                sa.or_(
-                    obs_query.c.size_hierarchy.is_(None),
-                    obs_query.c.size_hierarchy <= BibAreasTypes.size_hierarchy,
-                ),
-            )
         obs_query = obs_query.cte("OBS")
+
         agg_areas = (
             select([CorAreaSynthese.id_synthese, LAreas.id_area])
             .select_from(
@@ -431,9 +419,21 @@ def get_observations_for_web(permissions):
                 ),
             )
             .where(CorAreaSynthese.id_synthese == VSyntheseForWebApp.id_synthese)
-            .where(area_type_where_clause)
-            .lateral("agg_areas")
+            .where(
+                BibAreasTypes.type_code == current_app.config["SYNTHESE"]["AREA_AGGREGATION_TYPE"]
+            )
         )
+
+        if blurring_permissions:
+            # Do not select cells which size_hierarchy is bigger than AREA_AGGREGATION_TYPE
+            # It means that we do not aggregate obs that have a blurring geometry greater in
+            # size than the aggregation area
+            agg_areas = agg_areas.where(
+                sa.or_(
+                    obs_query.c.size_hierarchy <= BibAreasTypes.size_hierarchy,
+                )
+            )
+        agg_areas = agg_areas.lateral("agg_areas")
         obs_query = (
             select([LAreas.geojson_4326.label("geojson"), obs_query.c.obs_as_json])
             .select_from(
