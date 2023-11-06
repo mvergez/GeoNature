@@ -1355,7 +1355,7 @@ class TestSyntheseBlurring:
         set_logged_user(self.client, current_user)
         url = url_for("gn_synthese.get_observations_for_web")
 
-        response_json = self.client.post(url, json={"id_source": source.id_source}).json
+        response_json = self.client.post(url, json={"id_source": [source.id_source]}).json
 
         # Check unsensitive synthese obs geometry
         unsensitive_synthese = synthese_sensitive_data["obs_protected_not_sensitive"]
