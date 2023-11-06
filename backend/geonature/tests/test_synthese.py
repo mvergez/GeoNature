@@ -1352,7 +1352,7 @@ class TestSyntheseBlurring:
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
         synthese_read_permissions(current_user, 1, sensitivity_filter=False)
 
-        set_logged_user_cookie(self.client, current_user)
+        set_logged_user(self.client, current_user)
         url = url_for("gn_synthese.get_observations_for_web")
 
         response_json = self.client.post(url, json={"id_source": source.id_source}).json
@@ -1387,7 +1387,7 @@ class TestSyntheseBlurring:
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
         synthese_read_permissions(current_user, 1, sensitivity_filter=False)
 
-        set_logged_user_cookie(self.client, current_user)
+        set_logged_user(self.client, current_user)
         url = url_for("gn_synthese.get_one_synthese", id_synthese=sensitive_synthese.id_synthese)
 
         response_json = self.client.get(url).json
@@ -1405,7 +1405,7 @@ class TestSyntheseBlurring:
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
         synthese_read_permissions(current_user, 1, sensitivity_filter=False)
 
-        set_logged_user_cookie(self.client, current_user)
+        set_logged_user(self.client, current_user)
         url = url_for("gn_synthese.get_one_synthese", id_synthese=unsensitive_synthese.id_synthese)
 
         response_json = self.client.get(url).json
@@ -1422,7 +1422,7 @@ class TestSyntheseBlurring:
         synthese_export_permissions(current_user, None, sensitivity_filter=True)
         synthese_export_permissions(current_user, 1, sensitivity_filter=False)
 
-        set_logged_user_cookie(self.client, current_user)
+        set_logged_user(self.client, current_user)
 
         list_id_synthese = [synthese.id_synthese for synthese in synthese_sensitive_data.values()]
 
@@ -1455,7 +1455,7 @@ class TestSyntheseBlurring:
         synthese_export_permissions(current_user, None, sensitivity_filter=True)
         synthese_export_permissions(current_user, 1, sensitivity_filter=False)
 
-        set_logged_user_cookie(self.client, current_user)
+        set_logged_user(self.client, current_user)
 
         list_id_synthese = [synthese.id_synthese for synthese in synthese_sensitive_data.values()]
 
