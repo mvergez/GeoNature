@@ -475,7 +475,9 @@ class SyntheseQuery:
             if colname.startswith("area"):
                 if self.geom_column.class_ != self.model:
                     l_areas_cte = LAreas.query.filter(LAreas.id_area.in_(value)).cte("area_filter")
-                    self.query = self.query.where(func.ST_Intersects(self.geom_column, l_areas_cte.c.geom))
+                    self.query = self.query.where(
+                        func.ST_Intersects(self.geom_column, l_areas_cte.c.geom)
+                    )
                 else:
                     cor_area_synthese_alias = aliased(CorAreaSynthese)
                     self.add_join(
