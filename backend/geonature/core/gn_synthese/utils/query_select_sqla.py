@@ -136,7 +136,7 @@ class SyntheseQuery:
                 # push the joined table in _already_joined_table list
                 self._already_joined_table.append(right_table)
 
-    def build_permissions_filter(self, user, permissions):
+    def build_permissions_filter(self, user, permissions, blur_sensitive_observations=False):
         """
         Return a where clause for the given permissions set
         """
@@ -154,17 +154,20 @@ class SyntheseQuery:
             perm_filters = []
             if perm.sensitivity_filter:
                 if non_diffusion is None:
-                    non_diffusion = (
-                        TNomenclatures.query.filter(
-                            TNomenclatures.nomenclature_type.has(
-                                BibNomenclaturesTypes.mnemonique == "SENSIBILITE"
-                            )
+                    non_diffusion = TNomenclatures.query.filter(
+                        TNomenclatures.nomenclature_type.has(
+                            BibNomenclaturesTypes.mnemonique == "SENSIBILITE"
                         )
-                        .filter(TNomenclatures.cd_nomenclature == "4")
-                        .one()
                     )
+                    if not blur_sensitive_observations:
+                        non_diffusion = non_diffusion.filter(TNomenclatures.cd_nomenclature > "0")
+                    else:
+                        non_diffusion = non_diffusion.filter(TNomenclatures.cd_nomenclature == "4")
+                    non_diffusion = non_diffusion.all()
                 perm_filters.append(
-                    self.model.id_nomenclature_sensitivity != non_diffusion.id_nomenclature
+                    self.model.id_nomenclature_sensitivity.notin_(
+                        (nomenclature.id_nomenclature for nomenclature in non_diffusion)
+                    )
                 )
             if perm.scope_value:
                 if perm.scope_value not in datasets_by_scope:
@@ -190,11 +193,11 @@ class SyntheseQuery:
         else:
             return sa.false()
 
-    def filter_query_with_permissions(self, user, permissions):
+    def filter_query_with_permissions(self, user, permissions, blur_sensitive_observations=False):
         """
         Filter the query with the permissions of a user
         """
-        where_clause = self.build_permissions_filter(user=user, permissions=permissions)
+        where_clause = self.build_permissions_filter(user=user, permissions=permissions, blur_sensitive_observations=blur_sensitive_observations)
         self.query = self.query.where(where_clause)
 
     def filter_query_with_cruved(self, user, scope):
@@ -502,11 +505,11 @@ class SyntheseQuery:
                 else:
                     self.query = self.query.where(col.ilike("%{}%".format(value)))
 
-    def apply_all_filters(self, user, permissions):
+    def apply_all_filters(self, user, permissions, blur_sensitive_observations=False):
         if type(permissions) == int:  # scope
             self.filter_query_with_cruved(user, scope=permissions)
         else:
-            self.filter_query_with_permissions(user, permissions)
+            self.filter_query_with_permissions(user, permissions, blur_sensitive_observations)
         self.filter_taxonomy()
         self.filter_other_filters(user)
 
