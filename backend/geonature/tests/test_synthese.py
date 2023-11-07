@@ -1381,6 +1381,31 @@ class TestSyntheseBlurring:
             json_synthese=sensitive_synthese_from_response, synthese_from_db=sensitive_synthese
         )
 
+    def test_get_observations_for_web_blurring_excluded(
+        self, users, synthese_sensitive_data, source, synthese_read_permissions
+    ):
+        current_user = users["stranger_user"]
+        # None is 3
+        synthese_read_permissions(current_user, None, sensitivity_filter=True)
+        synthese_read_permissions(current_user, 1, sensitivity_filter=False)
+
+        set_logged_user(self.client, current_user)
+
+        url = url_for("gn_synthese.get_observations_for_web")
+
+        response_json = self.client.post(url, json={"id_source": [source.id_source]}).json
+
+        sensitive_synthese_ids = (
+            synthese.id_synthese
+            for synthese in [
+                synthese_sensitive_data["obs_sensitive_protected"],
+                synthese_sensitive_data["obs_sensitive_protected"],
+            ]
+        )
+
+        json_synthese_ids = (feature["properties"]["id"] for feature in response_json["features"])
+        assert all(synthese_id not in json_synthese_ids for synthese_id in sensitive_synthese_ids)
+
     def test_get_observations_for_web_blurring_grouped_geom(
         self,
         users,
@@ -1553,3 +1578,31 @@ class TestSyntheseBlurring:
         assert_sensitive_synthese(
             json_synthese=json_feature_synthese, synthese_from_db=sensitive_synthese
         )
+
+    def test_export_observations_sensitive_excluded(
+        self, users, synthese_export_permissions, synthese_sensitive_data
+    ):
+        current_user = users["stranger_user"]
+        # None is 3
+        synthese_export_permissions(current_user, None, sensitivity_filter=True)
+        synthese_export_permissions(current_user, 1, sensitivity_filter=False)
+
+        set_logged_user(self.client, current_user)
+
+        list_id_synthese = [
+            synthese.id_synthese
+            for synthese in synthese_sensitive_data.values()
+            if synthese_sensitive_data.keys()
+            in ["obs_sensitive_protected", "obs_sensitive_protected_2"]
+        ]
+
+        response = self.client.post(
+            url_for("gn_synthese.export_observations_web"),
+            json=list_id_synthese,
+            query_string={"export_format": "geojson"},
+        )
+
+        assert response.status_code == 200
+        # No feature accessible because sensitive data excluded if
+        # the user has no right to see it
+        assert len(response.json["features"]) == 0
