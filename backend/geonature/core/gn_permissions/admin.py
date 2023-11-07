@@ -354,7 +354,10 @@ class PermissionAdmin(CruvedProtectedMixin, ModelView):
         "role.nom_complet": "nom du rôle",
         "availability": "Permission",
         "scope": "Filtre sur l'appartenance des données",
-        "sensitivity_filter": ("Flouter" if config["SYNTHESE"]["BLUR_SENSITIVE_OBSERVATIONS"] else "Masquer") + " les données sensibles",
+        "sensitivity_filter": (
+            "Flouter" if config["SYNTHESE"]["BLUR_SENSITIVE_OBSERVATIONS"] else "Masquer"
+        )
+        + " les données sensibles",
     }
     column_select_related_list = ("availability",)
     column_searchable_list = ("role.identifiant", "role.nom_complet")
