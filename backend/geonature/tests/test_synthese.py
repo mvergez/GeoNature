@@ -1345,8 +1345,11 @@ class TestSyntheseBlurring:
         assert precise_perm in precise_perms
 
     def test_get_observations_for_web_blurring(
-        self, users, synthese_sensitive_data, source, synthese_read_permissions
+        self, users, synthese_sensitive_data, source, synthese_read_permissions, monkeypatch
     ):
+        # So that all burred geoms will not appear on the aggregated areas
+        monkeypatch.setitem(current_app.config["SYNTHESE"], "BLUR_SENSITIVE_OBSERVATIONS", True)
+
         current_user = users["stranger_user"]
         # None is 3
         synthese_read_permissions(current_user, None, sensitivity_filter=True)
@@ -1428,8 +1431,11 @@ class TestSyntheseBlurring:
         )
 
     def test_get_one_synthese_sensitive(
-        self, users, synthese_sensitive_data, synthese_read_permissions
+        self, users, synthese_sensitive_data, synthese_read_permissions, monkeypatch
     ):
+        # So that all burred geoms will not appear on the aggregated areas
+        monkeypatch.setitem(current_app.config["SYNTHESE"], "BLUR_SENSITIVE_OBSERVATIONS", True)
+
         current_user = users["stranger_user"]
         sensitive_synthese = synthese_sensitive_data["obs_sensitive_protected"]
         # None is 3
@@ -1462,6 +1468,22 @@ class TestSyntheseBlurring:
         assert_unsensitive_synthese(
             json_synthese=response_json, synthese_from_db=unsensitive_synthese
         )
+
+    def test_get_one_synthese_sensitive_excluded(
+        self, users, synthese_sensitive_data, synthese_read_permissions
+    ):
+        current_user = users["stranger_user"]
+        sensitive_synthese = synthese_sensitive_data["obs_sensitive_protected"]
+        # None is 3
+        synthese_read_permissions(current_user, None, sensitivity_filter=True)
+        synthese_read_permissions(current_user, 1, sensitivity_filter=False)
+
+        set_logged_user(self.client, current_user)
+        url = url_for("gn_synthese.get_one_synthese", id_synthese=sensitive_synthese.id_synthese)
+
+        response = self.client.get(url)
+
+        assert response.status_code == Forbidden.code
 
     def test_export_observations_unsensitive(
         self, users, synthese_export_permissions, synthese_sensitive_data
@@ -1501,8 +1523,11 @@ class TestSyntheseBlurring:
         )
 
     def test_export_observations_sensitive(
-        self, users, synthese_export_permissions, synthese_sensitive_data
+        self, users, synthese_export_permissions, synthese_sensitive_data, monkeypatch
     ):
+        # So that all burred geoms will not appear on the aggregated areas
+        monkeypatch.setitem(current_app.config["SYNTHESE"], "BLUR_SENSITIVE_OBSERVATIONS", True)
+
         current_user = users["stranger_user"]
         # None is 3
         synthese_export_permissions(current_user, None, sensitivity_filter=True)
