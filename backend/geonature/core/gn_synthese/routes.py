@@ -198,7 +198,7 @@ def build_allowed_geom_cte(
     blurred_geom_query,
     precise_geom_query,
     limit,
-    blur_sensitive_observations=False
+    blur_sensitive_observations=False,
 ):
     """ """
     # The goal is to separate the blurring and precise permissions.
@@ -211,10 +211,14 @@ def build_allowed_geom_cte(
 
     # Note: the used query is not important here, as it is only used to select the right Synthese model
     precise_perms_filter = precise_geom_query.build_permissions_filter(
-        g.current_user, precise_permissions, blur_sensitive_observations=blur_sensitive_observations
+        g.current_user,
+        precise_permissions,
+        blur_sensitive_observations=blur_sensitive_observations,
     )
     blurring_perms_filter = precise_geom_query.build_permissions_filter(
-        g.current_user, blurring_permissions, blur_sensitive_observations=blur_sensitive_observations
+        g.current_user,
+        blurring_permissions,
+        blur_sensitive_observations=blur_sensitive_observations,
     )
 
     # Access precise geom for obs with precise perm and for unsensitive obs with blurring perm
@@ -392,7 +396,9 @@ def get_observations_for_web(permissions):
             blurred_geom_query=blurred_geom_query,
             precise_geom_query=precise_geom_query,
             limit=result_limit,
-            blur_sensitive_observations=current_app.config["SYNTHESE"]["BLUR_SENSITIVE_OBSERVATIONS"]
+            blur_sensitive_observations=current_app.config["SYNTHESE"][
+                "BLUR_SENSITIVE_OBSERVATIONS"
+            ],
         )
 
         obs_query = build_synthese_obs_query(
@@ -542,7 +548,10 @@ def get_one_synthese(permissions, id_synthese):
 
     synthese = synthese.get_or_404(id_synthese)
 
-    if not synthese.has_instance_permission(permissions=permissions):
+    if not synthese.has_instance_permission(
+        permissions=permissions,
+        blur_sensitive_observations=current_app.config["SYNTHESE"]["BLUR_SENSITIVE_OBSERVATIONS"],
+    ):
         raise Forbidden()
 
     blurring_permissions, precise_permissions = split_blurring_precise_permissions(permissions)
@@ -765,6 +774,9 @@ def export_observations_web(permissions):
             blurred_geom_query=blurred_geom_query,
             precise_geom_query=precise_geom_query,
             limit=current_app.config["SYNTHESE"]["NB_MAX_OBS_EXPORT"],
+            blur_sensitive_observations=current_app.config["SYNTHESE"][
+                "BLUR_SENSITIVE_OBSERVATIONS"
+            ],
         )
 
         # Overwrite geometry columns to compute the blurred geometry from the blurring cte

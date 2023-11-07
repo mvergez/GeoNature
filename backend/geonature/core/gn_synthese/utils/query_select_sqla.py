@@ -197,7 +197,11 @@ class SyntheseQuery:
         """
         Filter the query with the permissions of a user
         """
-        where_clause = self.build_permissions_filter(user=user, permissions=permissions, blur_sensitive_observations=blur_sensitive_observations)
+        where_clause = self.build_permissions_filter(
+            user=user,
+            permissions=permissions,
+            blur_sensitive_observations=blur_sensitive_observations,
+        )
         self.query = self.query.where(where_clause)
 
     def filter_query_with_cruved(self, user, scope):
